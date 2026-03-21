@@ -1,0 +1,14 @@
+# Copy to local.properties and fill in your values (local.properties is gitignored).
+
+sdk.dir=/path/to/Android/sdk
+
+# Optional: Firebase web publishing (see web/ folder)
+firebase.projectId=
+firebase.apiKey=
+firebase.writeKey=
+
+# Optional: release signing (see app/build.gradle.kts)
+signing.storeFile=release-keystore.jks
+signing.storePassword=
+signing.keyAlias=chess-tournament
+signing.keyPassword=

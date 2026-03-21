@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess Tournament</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f0;color:#1a1a1a;line-height:1.5}
+.container{max-width:960px;margin:0 auto;padding:16px}
+header{background:#1b5e20;color:#fff;padding:24px 16px;text-align:center}
+header h1{font-size:1.5rem;margin-bottom:4px}
+header .meta{font-size:.85rem;opacity:.85}
+header .meta span{margin:0 8px}
+.tabs{display:flex;border-bottom:2px solid #ddd;margin:16px 0 0}
+.tab{padding:10px 20px;cursor:pointer;font-weight:600;color:#666;border-bottom:3px solid transparent;transition:all .2s}
+.tab:hover{color:#1b5e20}
+.tab.active{color:#1b5e20;border-bottom-color:#1b5e20}
+.panel{display:none;padding:16px 0}
+.panel.active{display:block}
+table{width:100%;border-collapse:collapse;font-size:.875rem}
+th{background:#e8f5e9;color:#1b5e20;padding:10px 8px;text-align:left;font-weight:700;position:sticky;top:0}
+td{padding:8px;border-bottom:1px solid #eee}
+tr:nth-child(even){background:#fafaf5}
+tr:hover{background:#e8f5e9}
+.rank{text-align:center;width:36px;font-weight:700}
+.rank-1{color:#c49b00}
+.rank-2{color:#666}
+.rank-3{color:#8b4513}
+.score{font-weight:700;color:#1b5e20;text-align:center}
+.tb{text-align:center;color:#666;font-size:.8rem}
+.rtg{text-align:center;font-size:.8rem}
+.withdrawn{opacity:.5;text-decoration:line-through}
+.round-card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.1);margin-bottom:12px;overflow:hidden}
+.round-header{background:#e8f5e9;padding:12px 16px;font-weight:700;color:#1b5e20;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.round-header:hover{background:#c8e6c9}
+.round-body{padding:0}
+.pairing-row{display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid #f0f0f0}
+.pairing-row:last-child{border-bottom:none}
+.board-num{width:32px;font-weight:700;color:#888;font-size:.8rem}
+.player-white,.player-black{flex:1;display:flex;align-items:center;gap:6px}
+.player-black{justify-content:flex-end;text-align:right}
+.color-dot{width:16px;height:16px;border-radius:50%;flex-shrink:0}
+.color-dot.white{background:#fff;border:2px solid #999}
+.color-dot.black{background:#333}
+.result-badge{padding:2px 10px;border-radius:4px;font-weight:700;font-size:.8rem;min-width:52px;text-align:center}
+.result-badge.win{background:#e8f5e9;color:#1b5e20}
+.result-badge.loss{background:#fce4ec;color:#c62828}
+.result-badge.draw{background:#e3f2fd;color:#1565c0}
+.result-badge.bye{background:#fff3e0;color:#e65100}
+.result-badge.forfeit{background:#fce4ec;color:#c62828;font-style:italic}
+.result-badge.pending{background:#f5f5f5;color:#999}
+.vs{margin:0 8px;color:#aaa;font-size:.75rem}
+.ct-wrap{overflow-x:auto}
+.ct-wrap table{min-width:600px}
+.ct-wrap th,.ct-wrap td{text-align:center;padding:6px 4px;font-size:.8rem;min-width:32px}
+.ct-self{background:#e0e0e0;color:#888}
+.ct-win{color:#1b5e20;font-weight:700}
+.ct-loss{color:#c62828;font-weight:700}
+.ct-draw{color:#1565c0;font-weight:700}
+.ct-name{text-align:left!important;min-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.loading{text-align:center;padding:80px 20px;color:#888;font-size:1.1rem}
+.error{text-align:center;padding:80px 20px;color:#c62828;font-size:1.1rem}
+@media(max-width:600px){.container{padding:8px}th,td{padding:6px 4px;font-size:.75rem}.pairing-row{padding:8px 12px;flex-wrap:wrap}.player-white,.player-black{font-size:.85rem}}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="loading" id="loading">Loading tournament data...</div>
+</div>
+
+<script>
+// Set these to your Firebase project (same project as android local.properties firebase.*).
+const PROJECT_ID = "YOUR_FIREBASE_PROJECT_ID";
+const API_KEY = "YOUR_FIREBASE_WEB_API_KEY";
+
+const path = window.location.pathname;
+const match = path.match(/\/t\/([A-Za-z0-9]+)/);
+if (!match) {
+  document.getElementById("loading").className = "error";
+  document.getElementById("loading").textContent = "No tournament code found in URL. Use /t/{code}";
+} else {
+  loadTournament(match[1]);
+}
+
+async function loadTournament(code) {
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/tournaments/${code}?key=${API_KEY}`;
+    const resp = await fetch(url);
+    if (resp.status === 404) { showError("Tournament not found. Check the link and try again."); return; }
+    if (!resp.ok) { showError("Failed to load (HTTP " + resp.status + ")"); return; }
+    const doc = await resp.json();
+    if (!doc.fields) { showError("Tournament not found."); return; }
+    render(unwrap(doc.fields));
+  } catch (e) {
+    showError("Failed to load: " + e.message);
+  }
+}
+
+function unwrap(val) {
+  if (val === null || val === undefined) return null;
+  if ("stringValue" in val) return val.stringValue;
+  if ("integerValue" in val) return Number(val.integerValue);
+  if ("doubleValue" in val) return val.doubleValue;
+  if ("booleanValue" in val) return val.booleanValue;
+  if ("nullValue" in val) return null;
+  if ("mapValue" in val) return unwrap(val.mapValue.fields || {});
+  if ("arrayValue" in val) return (val.arrayValue.values || []).map(unwrap);
+  if (typeof val === "object") {
+    const out = {};
+    for (const k in val) out[k] = unwrap(val[k]);
+    return out;
+  }
+  return val;
+}
+
+function showError(msg) {
+  document.getElementById("loading").className = "error";
+  document.getElementById("loading").textContent = msg;
+}
+
+function fmt(v) {
+  const n = Number(v) || 0;
+  return n === Math.floor(n) ? String(Math.floor(n)) : n.toFixed(1);
+}
+
+function resultSymbol(result) {
+  const map = {
+    WHITE_WINS: ["1-0", "win"],
+    BLACK_WINS: ["0-1", "win"],
+    DRAW: ["\u00BD-\u00BD", "draw"],
+    BYE: ["BYE", "bye"],
+    FORFEIT_WHITE: ["F 1-0", "forfeit"],
+    FORFEIT_BLACK: ["F 0-1", "forfeit"],
+    PENDING: ["*", "pending"],
+  };
+  return map[result] || ["?", "pending"];
+}
+
+function crossResult(whiteId, blackId, result) {
+  const r = result;
+  if (r === "WHITE_WINS" || r === "FORFEIT_WHITE") return { [whiteId]: "1", [blackId]: "0" };
+  if (r === "BLACK_WINS" || r === "FORFEIT_BLACK") return { [whiteId]: "0", [blackId]: "1" };
+  if (r === "DRAW") return { [whiteId]: "\u00BD", [blackId]: "\u00BD" };
+  return {};
+}
+
+function parseTBConfig(cfg) {
+  if (!cfg) return ["BH"];
+  const nameMap = {
+    BUCHHOLZ: "BH", BUCHHOLZ_CUT1: "BC1", MEDIAN_BUCHHOLZ: "MBH",
+    SONNEBORN_BERGER: "SB", DIRECT_ENCOUNTER: "DE", WINS: "W",
+    BLACK_WINS: "BW", KOYA: "KY"
+  };
+  return cfg.split(",").map(s => nameMap[s.trim()] || s.trim()).slice(0, 4);
+}
+
+function render(data) {
+  const players = (data.players || []).sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.tiebreak !== a.tiebreak) return b.tiebreak - a.tiebreak;
+    return (b.rating || 0) - (a.rating || 0);
+  });
+  const pairings = data.pairings || [];
+  const nameMap = {};
+  players.forEach(p => { nameMap[p.id] = p.name; });
+  const tbHeaders = parseTBConfig(data.tiebreakConfig);
+  const typeName = data.type === "ROUND_ROBIN" ? "Round Robin" : "Swiss";
+  const tc = data.timeControl || "";
+
+  let html = `<header>
+    <h1>${esc(data.name || "Tournament")}</h1>
+    <div class="meta">
+      <span>${typeName}</span>
+      <span>Round ${data.currentRound || 0} / ${data.totalRounds || "?"}</span>
+      ${tc ? `<span>${esc(tc)}</span>` : ""}
+      <span>${data.status || ""}</span>
+    </div>
+  </header>
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" data-tab="standings">Standings</div>
+      <div class="tab" data-tab="rounds">Rounds</div>
+      <div class="tab" data-tab="crosstable">Cross-Table</div>
+    </div>
+    <div class="panel active" id="standings">${renderStandings(players, tbHeaders)}</div>
+    <div class="panel" id="rounds">${renderRounds(pairings, nameMap)}</div>
+    <div class="panel" id="crosstable">${renderCrossTable(players, pairings)}</div>
+  </div>`;
+
+  document.getElementById("app").innerHTML = html;
+
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById(tab.dataset.tab).classList.add("active");
+    });
+  });
+
+  document.querySelectorAll(".round-header").forEach(h => {
+    h.addEventListener("click", () => {
+      const body = h.nextElementSibling;
+      body.style.display = body.style.display === "none" ? "block" : "none";
+      h.querySelector(".arrow").textContent = body.style.display === "none" ? "\u25B6" : "\u25BC";
+    });
+  });
+}
+
+function renderStandings(players, tbHeaders) {
+  let h = `<table><thead><tr>
+    <th class="rank">#</th><th>Player</th><th class="rtg">Rtg</th><th class="score">Pts</th>`;
+  tbHeaders.forEach(t => { h += `<th class="tb">${t}</th>`; });
+  h += `</tr></thead><tbody>`;
+
+  players.forEach((p, i) => {
+    const wd = p.status === "WITHDRAWN";
+    const cls = wd ? "withdrawn" : "";
+    const rankCls = i === 0 ? "rank-1" : i === 1 ? "rank-2" : i === 2 ? "rank-3" : "";
+    const tbVals = [p.tiebreak, p.tiebreak2, p.tiebreak3, p.tiebreak4];
+    h += `<tr class="${cls}">
+      <td class="rank ${rankCls}">${i + 1}</td>
+      <td>${esc(p.name)}${wd ? " (W)" : ""}${p.fideId ? `<br><small style="color:#888">${esc(p.fideId)}</small>` : ""}</td>
+      <td class="rtg">${p.rating || ""}</td>
+      <td class="score">${fmt(p.score)}</td>`;
+    tbHeaders.forEach((_, ti) => {
+      h += `<td class="tb">${fmt(tbVals[ti] || 0)}</td>`;
+    });
+    h += `</tr>`;
+  });
+  return h + `</tbody></table>`;
+}
+
+function renderRounds(pairings, nameMap) {
+  const rounds = {};
+  pairings.forEach(p => {
+    const r = p.roundNumber;
+    if (!rounds[r]) rounds[r] = [];
+    rounds[r].push(p);
+  });
+  const sortedRounds = Object.keys(rounds).map(Number).sort((a, b) => a - b);
+  if (sortedRounds.length === 0) return `<p style="text-align:center;padding:40px;color:#888">No rounds yet</p>`;
+
+  let h = "";
+  sortedRounds.forEach(r => {
+    const ps = rounds[r].sort((a, b) => a.board - b.board);
+    h += `<div class="round-card">
+      <div class="round-header">Round ${r} <span class="arrow">\u25BC</span></div>
+      <div class="round-body">`;
+    ps.forEach(p => {
+      const wName = nameMap[p.whitePlayerId] || "?";
+      const bName = p.blackPlayerId ? (nameMap[p.blackPlayerId] || "?") : "BYE";
+      const [rText, rClass] = resultSymbol(p.result);
+      h += `<div class="pairing-row">
+        <div class="board-num">${p.board}</div>
+        <div class="player-white"><span class="color-dot white"></span>${esc(wName)}</div>
+        <div class="result-badge ${rClass}">${rText}</div>
+        <div class="player-black">${esc(bName)}<span class="color-dot black"></span></div>
+      </div>`;
+    });
+    h += `</div></div>`;
+  });
+  return h;
+}
+
+function renderCrossTable(players, pairings) {
+  if (players.length === 0) return `<p style="text-align:center;padding:40px;color:#888">No data</p>`;
+  const n = players.length;
+  const idxMap = {};
+  players.forEach((p, i) => { idxMap[p.id] = i; });
+  const matrix = Array.from({ length: n }, () => Array(n).fill(""));
+
+  pairings.forEach(p => {
+    if (!p.blackPlayerId) return;
+    const wi = idxMap[p.whitePlayerId];
+    const bi = idxMap[p.blackPlayerId];
+    if (wi === undefined || bi === undefined) return;
+    const res = crossResult(p.whitePlayerId, p.blackPlayerId, p.result);
+    if (res[p.whitePlayerId]) {
+      matrix[wi][bi] = matrix[wi][bi] ? matrix[wi][bi] + " " + res[p.whitePlayerId] : res[p.whitePlayerId];
+      matrix[bi][wi] = matrix[bi][wi] ? matrix[bi][wi] + " " + res[p.blackPlayerId] : res[p.blackPlayerId];
+    }
+  });
+
+  let h = `<div class="ct-wrap"><table><thead><tr><th>#</th><th class="ct-name">Player</th>`;
+  for (let i = 0; i < n; i++) h += `<th>${i + 1}</th>`;
+  h += `<th>Pts</th></tr></thead><tbody>`;
+
+  players.forEach((p, i) => {
+    h += `<tr><td>${i + 1}</td><td class="ct-name">${esc(p.name)}</td>`;
+    for (let j = 0; j < n; j++) {
+      if (i === j) {
+        h += `<td class="ct-self">X</td>`;
+      } else {
+        const v = matrix[i][j] || "";
+        let cls = "";
+        if (v.includes("1")) cls = "ct-win";
+        else if (v.includes("0")) cls = "ct-loss";
+        else if (v.includes("\u00BD")) cls = "ct-draw";
+        h += `<td class="${cls}">${v}</td>`;
+      }
+    }
+    h += `<td class="score">${fmt(p.score)}</td></tr>`;
+  });
+  return h + `</tbody></table></div>`;
+}
+
+function esc(s) {
+  if (!s) return "";
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+</script>
+</body>
+</html>
