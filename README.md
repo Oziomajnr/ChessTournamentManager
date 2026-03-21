@@ -39,6 +39,19 @@ Includes simulation-based property tests for Swiss pairing (`SwissPairingFideRul
 
 Static site and Firebase rules live under `web/`. Deploy with the Firebase CLI as needed.
 
+## Publishing to GitHub
+
+Use a **new** personal access token (never reuse a token that was pasted in chat). Install `gh` (`brew install gh`), then in your **local** terminal:
+
+```bash
+export GITHUB_TOKEN='ghp_...'   # classic PAT with repo scope
+./scripts/github-create-and-push.sh
+# optional: ./scripts/github-create-and-push.sh my-repo-name
+# optional: GITHUB_OWNER=otheruser ./scripts/github-create-and-push.sh
+```
+
+Or: `gh auth login`, then `gh repo create Oziomajnr/chess-tournament-manager --public --source=. --remote=origin --push`.
+
 ## License
 
 See repository license (add one if you publish publicly).
