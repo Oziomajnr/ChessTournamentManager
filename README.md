@@ -14,6 +14,7 @@ Android app for running chess tournaments: Swiss (FIDE C.04.1 style) and Round R
 3. Set `sdk.dir` to your Android SDK path.
 4. Optional: add Firebase keys for “Publish to web” (see `web/` and `FirebaseConfig.kt`).
 5. Optional: configure release signing in `local.properties` (keystore is not in the repo).
+6. **Premium / Remote Config**: Premium is disabled by default via Firebase Remote Config (`premium_required` = false). To enable premium later: add your project’s `google-services.json` to `app/`, add the Android app in Firebase Console, create the `premium_required` parameter in Remote Config and set it to `true`.
 
 ## Build
 

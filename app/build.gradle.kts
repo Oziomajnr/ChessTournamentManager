@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
 }
 
 fun localProp(key: String, default: String = ""): String {
@@ -13,11 +14,11 @@ fun localProp(key: String, default: String = ""): String {
 }
 
 android {
-    namespace = "com.chess.tournament"
+    namespace = "com.chunkymonkey.chess.tournament"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.chess.tournament"
+        applicationId = "com.chunkymonkey.chess.tournament"
         minSdk = 24
         targetSdk = 35
         versionCode = 2
@@ -98,6 +99,10 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation("com.android.billingclient:billing-ktx:7.1.1")
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.config)
+    implementation(libs.firebase.analytics)
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.9.22")
