@@ -15,6 +15,7 @@ import com.android.billingclient.api.QueryPurchasesParams
 import com.android.billingclient.api.acknowledgePurchase
 import com.android.billingclient.api.queryProductDetails
 import com.android.billingclient.api.queryPurchasesAsync
+import com.chunkymonkey.chess.tournament.ChessTournamentApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +24,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class BillingManager(context: Context) {
+
+    private val analytics =
+        (context.applicationContext as ChessTournamentApp).analytics
 
     companion object {
         const val PRODUCT_LIFETIME = "pro_lifetime"
@@ -123,6 +127,7 @@ class BillingManager(context: Context) {
     private suspend fun handlePurchases(purchases: List<Purchase>) {
         for (purchase in purchases) {
             if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
+                val newPurchase = !purchase.isAcknowledged
                 if (!purchase.isAcknowledged) {
                     val ackParams = com.android.billingclient.api.AcknowledgePurchaseParams.newBuilder()
                         .setPurchaseToken(purchase.purchaseToken)
@@ -135,6 +140,11 @@ class BillingManager(context: Context) {
                 }
                 if (purchase.products.contains(PRODUCT_MONTHLY)) {
                     _hasSubscription.value = true
+                }
+                if (newPurchase) {
+                    for (productId in purchase.products) {
+                        analytics.logPurchaseCompleted(productId)
+                    }
                 }
             }
         }
@@ -150,6 +160,7 @@ class BillingManager(context: Context) {
                         .build()
                 )
             ).build()
+        analytics.logPurchaseFlowStarted(PRODUCT_LIFETIME)
         billingClient.launchBillingFlow(activity, flowParams)
         return true
     }
@@ -166,6 +177,7 @@ class BillingManager(context: Context) {
                         .build()
                 )
             ).build()
+        analytics.logPurchaseFlowStarted(PRODUCT_MONTHLY)
         billingClient.launchBillingFlow(activity, flowParams)
         return true
     }
@@ -178,6 +190,7 @@ class BillingManager(context: Context) {
             ?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
 
     fun restorePurchases() {
+        analytics.logRestorePurchasesTapped()
         scope.launch { queryExistingPurchases() }
     }
 

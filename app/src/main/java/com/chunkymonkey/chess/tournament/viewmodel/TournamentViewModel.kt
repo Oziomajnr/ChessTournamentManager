@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chunkymonkey.chess.tournament.ChessTournamentApp
+import com.chunkymonkey.chess.tournament.analytics.AppAnalytics
 import com.chunkymonkey.chess.tournament.db.entity.Pairing
 import com.chunkymonkey.chess.tournament.db.entity.PairingResult
 import com.chunkymonkey.chess.tournament.db.entity.PlayerStanding
@@ -41,6 +42,7 @@ sealed class PublishState {
 class TournamentViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = ChessTournamentApp.getDatabase(application)
+    private val analytics = ChessTournamentApp.getAnalytics(application)
     private val tournamentDao = db.tournamentDao()
     private val pairingDao = db.pairingDao()
     private val playerDao = db.playerDao()
@@ -100,12 +102,14 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
                 )
             }
             tournamentDao.insertTournamentPlayers(tournamentPlayers)
+            analytics.logTournamentCreated(type, playerIds.size, totalRounds)
         }
     }
 
     fun deleteTournament(tournament: Tournament) {
         viewModelScope.launch {
             tournamentDao.delete(tournament)
+            analytics.logTournamentDeleted()
         }
     }
 
@@ -155,12 +159,14 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
                     break
                 }
             }
+            analytics.logRoundGenerated(nextRound, tournament.type)
         }
     }
 
     fun updatePairingResult(pairingId: Long, result: PairingResult) {
         viewModelScope.launch {
             pairingDao.updateResult(pairingId, result)
+            analytics.logGameResultSaved(result)
             val tournamentId = _selectedTournamentId.value ?: return@launch
             recalculateStandings(tournamentId)
         }
@@ -252,14 +258,17 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             if (proStateManager.proFeaturesLocked.value) {
                 _publishState.value = PublishState.Error("PRO_REQUIRED")
+                analytics.logWebPublishFailure(AppAnalytics.publishFailureReasonCode("PRO_REQUIRED"))
                 return@launch
             }
             _publishState.value = PublishState.Loading
             val tournament = selectedTournament.value
             if (tournament == null) {
                 _publishState.value = PublishState.Error("No tournament selected")
+                analytics.logWebPublishFailure(AppAnalytics.publishFailureReasonCode("No tournament selected"))
                 return@launch
             }
+            val firstPublish = tournament.shareCode == null
             val currentStandings = tournamentDao.getTournamentStandingsOnce(tournament.id)
             val allPairings = pairingDao.getAllPairingsForTournament(tournament.id)
 
@@ -269,9 +278,11 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
                         tournamentDao.update(tournament.copy(shareCode = result.shareCode))
                     }
                     _publishState.value = PublishState.Success(result.url)
+                    analytics.logWebPublishSuccess(firstPublish)
                 }
                 is PublishResult.Error -> {
                     _publishState.value = PublishState.Error(result.message)
+                    analytics.logWebPublishFailure(AppAnalytics.publishFailureReasonCode(result.message))
                 }
             }
         }
@@ -294,6 +305,7 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             val tournament = selectedTournament.value ?: return@launch
             tournamentDao.update(tournament.copy(status = TournamentStatus.COMPLETED))
+            analytics.logTournamentCompleted()
         }
     }
 

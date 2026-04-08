@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val analytics = ChessTournamentApp.getAnalytics(application)
     private val playerDao = ChessTournamentApp.getDatabase(application).playerDao()
 
     val allPlayers = playerDao.getAllPlayers()
@@ -19,6 +20,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun addPlayer(name: String, fideId: String, rating: Int) {
         viewModelScope.launch {
             playerDao.insert(Player(name = name, fideId = fideId, rating = rating))
+            analytics.logPlayerAdded()
         }
     }
 
@@ -31,6 +33,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun deletePlayer(player: Player) {
         viewModelScope.launch {
             playerDao.delete(player)
+            analytics.logPlayerDeleted()
         }
     }
 }

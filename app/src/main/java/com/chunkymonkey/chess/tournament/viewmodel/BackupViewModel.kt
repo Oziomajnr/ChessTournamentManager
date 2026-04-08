@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.chunkymonkey.chess.tournament.ChessTournamentApp
 import com.chunkymonkey.chess.tournament.backup.BackupManager
 import com.chunkymonkey.chess.tournament.backup.BackupResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 
 class BackupViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val analytics = ChessTournamentApp.getAnalytics(application)
     private val backupManager = BackupManager(application)
 
     private val _isLoading = MutableStateFlow(false)
@@ -26,6 +28,7 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
             _lastResult.value = null
             val result = backupManager.exportToUri(uri)
             _lastResult.value = result
+            analytics.logBackupExport(result.success, result.playerCount, result.tournamentCount)
             _isLoading.value = false
         }
     }
@@ -36,6 +39,7 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
             _lastResult.value = null
             val result = backupManager.importFromUri(uri)
             _lastResult.value = result
+            analytics.logBackupImport(result.success, result.playerCount, result.tournamentCount)
             _isLoading.value = false
         }
     }
