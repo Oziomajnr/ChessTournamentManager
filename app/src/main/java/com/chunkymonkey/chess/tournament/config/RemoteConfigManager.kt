@@ -22,7 +22,7 @@ class RemoteConfigManager {
     companion object {
         private const val TAG = "RemoteConfig"
         private const val KEY_PREMIUM_REQUIRED = "premium_required"
-        private const val FETCH_INTERVAL_SECONDS = 3600L
+        private const val FETCH_INTERVAL_SECONDS = 60L
     }
 
     private val remoteConfig = FirebaseRemoteConfig.getInstance()

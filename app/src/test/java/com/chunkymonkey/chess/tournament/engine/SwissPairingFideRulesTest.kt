@@ -232,7 +232,7 @@ class SwissPairingFideRulesTest {
         val allPairings = previousPairings + newPairings
 
         // Build per-player color history in round order
-        val colorHistory = mutableMapOf<Long, MutableList<Char>>()
+        val colorHistory  = mutableMapOf<Long, MutableList<Char>>()
         val byRound = allPairings
             .filter { it.blackPlayerId != null }
             .sortedBy { it.roundNumber }

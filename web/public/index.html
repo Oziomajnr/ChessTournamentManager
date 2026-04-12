@@ -78,8 +78,8 @@ const API_KEY = "YOUR_FIREBASE_WEB_API_KEY";
 const path = window.location.pathname;
 const match = path.match(/\/t\/([A-Za-z0-9]+)/);
 if (!match) {
+  document.getElementById("loading").innerHTML = 'No tournament code found in URL. Use <code>/t/{code}</code><br><br><a href="/privacy.html">Privacy Policy</a>';
   document.getElementById("loading").className = "error";
-  document.getElementById("loading").textContent = "No tournament code found in URL. Use /t/{code}";
 } else {
   loadTournament(match[1]);
 }
@@ -176,6 +176,7 @@ function render(data) {
       <span>Round ${data.currentRound || 0} / ${data.totalRounds || "?"}</span>
       ${tc ? `<span>${esc(tc)}</span>` : ""}
       <span>${data.status || ""}</span>
+      <span><a href="/privacy.html" style="color:inherit;opacity:.9">Privacy</a></span>
     </div>
   </header>
   <div class="container">
