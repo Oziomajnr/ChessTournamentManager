@@ -67,25 +67,40 @@ def dispatch_ci(branch):
 def review_gate(pr_number):
     pr = gh.api(f"{gh.API}/pulls/{int(pr_number)}")
     sha = pr["head"]["sha"]
-    tracked = re.fullmatch(r"delivery/task-(\d+)(?:-fix-\d+)?", pr["head"]["ref"])
+    # Commit statuses belong to a SHA. A second PR with the same head cannot relax it.
+    associated = [pr]
+    page = 1
+    while True:
+        batch = gh.api(f"{gh.API}/commits/{sha}/pulls?per_page=100&page={page}")
+        associated.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
     state, description = (
         "success",
         "Regular pull request follows repository review rules",
     )
-    if tracked and pr["head"]["repo"]["full_name"] == gh.REPO:
+    for change in associated:
+        head = change["head"]
+        tracked = re.fullmatch(r"delivery/task-(\d+)(?:-fix-\d+)?", head["ref"])
+        if (
+            not tracked
+            or head["sha"] != sha
+            or (head.get("repo") or {}).get("full_name") != gh.REPO
+        ):
+            continue
         task = gh.Record(f"tasks/{int(tracked.group(1))}").data
         review = task.get("review", {})
-        state, description = (
-            "pending",
-            "Waiting for independent review of this revision",
-        )
-        if task.get("pr") == int(pr_number) and review.get("sha") == sha:
-            state = "success" if review["passed"] else "failure"
-            description = (
-                "Independent review passed"
-                if review["passed"]
-                else "Review requires changes"
+        if task.get("pr") != change["number"] or review.get("sha") != sha:
+            state, description = (
+                "pending",
+                "Waiting for independent review of this revision",
             )
+            break
+        if not review["passed"]:
+            state, description = "failure", "Review requires changes"
+            break
+        description = "Independent review passed"
     gh.api(
         f"{gh.API}/statuses/{sha}",
         "POST",

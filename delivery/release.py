@@ -10,7 +10,7 @@ from pathlib import Path
 from zipfile import ZIP_STORED, ZipFile
 
 from delivery.adapters import github as gh
-from delivery.adapters.play import Play, PlayError
+from delivery.adapters.play import Play, PlayError, VersionConflict
 from delivery.agents import config
 from delivery.policy import (
     REPAIR_LIMIT,
@@ -302,7 +302,31 @@ def drive():
     def mutate(action, pct):
         with tempfile.TemporaryDirectory() as temp:
             path = get_bundle(c, Path(temp))[0] if action == "publish_test" else None
-            play.mutate(c, save, action, pct, path)
+            try:
+                play.mutate(c, save, action, pct, path)
+            except VersionConflict:
+                if (
+                    action != "publish_test"
+                    or c.get("smoke")
+                    or c.get("approval_request")
+                ):
+                    raise
+                retired = c.setdefault("unusable_builds", [])
+                retired.append(c["build"])
+                if len(retired) > REPAIR_LIMIT:
+                    c["blocked"] = (
+                        "Play rejected three version codes. Reconcile the Play and delivery histories."
+                    )
+                    gh.notify_once(
+                        record,
+                        c["issue"],
+                        "version-conflict-" + str(c["build"]),
+                        c["blocked"],
+                    )
+                else:
+                    for field in ("build", "sha256", "intent", "submitted"):
+                        c.pop(field, None)
+                save()
 
     if c.get("blocked"):
         gh.summary(c["blocked"])

@@ -23,6 +23,10 @@ class PlayError(RuntimeError):
         super().__init__(f"Play returned {status}: {message[:380]}")
 
 
+class VersionConflict(ValueError):
+    pass
+
+
 def track_state(track, summaries, build):
     code = str(build)
     rows = [r for r in track.get("releases", []) if code in r.get("versionCodes", [])]
@@ -236,8 +240,22 @@ class Play:
                 upload = url.replace(
                     "/androidpublisher/v3/", "/upload/androidpublisher/v3/"
                 )
-                same = self.request(
-                    "POST", upload + "/bundles?uploadType=media", data, media=True
+                try:
+                    same = self.request(
+                        "POST", upload + "/bundles?uploadType=media", data, media=True
+                    )
+                except PlayError as error:
+                    message = str(error).lower()
+                    if error.status in (400, 409) and all(
+                        word in message for word in ("version code", "already", "used")
+                    ):
+                        raise VersionConflict(
+                            "Play has already consumed this version code"
+                        ) from error
+                    raise
+            elif same.get("sha256", "").lower() != candidate["sha256"]:
+                raise VersionConflict(
+                    "This version code belongs to a different uploaded artifact"
                 )
             if (
                 int(same["versionCode"]) != candidate["build"]
