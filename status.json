@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "lanes": [
+    {
+      "id": "development",
+      "label": "Development",
+      "steps": [
+        {
+          "id": "backlog",
+          "label": "Backlog"
+        },
+        {
+          "id": "ready",
+          "label": "Ready for pickup"
+        },
+        {
+          "id": "plan",
+          "label": "Planning"
+        },
+        {
+          "id": "code",
+          "label": "Implementation"
+        },
+        {
+          "id": "review",
+          "label": "Code review"
+        }
+      ]
+    },
+    {
+      "id": "integration",
+      "label": "GitHub checks",
+      "steps": [
+        {
+          "id": "pull",
+          "label": "Pull request"
+        },
+        {
+          "id": "ci",
+          "label": "CI checks"
+        },
+        {
+          "id": "merge",
+          "label": "Merge"
+        },
+        {
+          "id": "queue",
+          "label": "Release queue"
+        }
+      ]
+    },
+    {
+      "id": "distribution",
+      "label": "Google Play",
+      "steps": [
+        {
+          "id": "build",
+          "label": "Build and sign"
+        },
+        {
+          "id": "internal",
+          "label": "Internal distribution"
+        },
+        {
+          "id": "device",
+          "label": "Device check"
+        },
+        {
+          "id": "approval",
+          "label": "Owner approval"
+        },
+        {
+          "id": "rollout",
+          "label": "Production rollout"
+        },
+        {
+          "id": "published",
+          "label": "Published at 100%"
+        }
+      ]
+    },
+    {
+      "id": "exceptions",
+      "label": "Other states",
+      "steps": [
+        {
+          "id": "attention",
+          "label": "Needs attention"
+        },
+        {
+          "id": "closed",
+          "label": "Closed outside delivery"
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "number": 6,
+      "title": "Raise release DEX obfuscation from 0% to at least 25% by February 2027",
+      "url": "https://github.com/Oziomajnr/ChessTournamentManager/issues/6",
+      "state": "open",
+      "stage": "Backlog",
+      "detail": "A maintainer can label this issue agent-ready.",
+      "step": "backlog",
+      "links": []
+    },
+    {
+      "number": 7,
+      "title": "Update the transitive AndroidX Fragment dependency flagged by Google Play",
+      "url": "https://github.com/Oziomajnr/ChessTournamentManager/issues/7",
+      "state": "open",
+      "stage": "Ready for local pickup",
+      "detail": "The plan is saved. Ask local Codex to pick up this issue.",
+      "step": "ready",
+      "links": [
+        {
+          "label": "Task run",
+          "url": "https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45412661287/attempts/1"
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,41 @@
 # Issue delivery status
 
-GitHub Actions refreshes this view from the issue queue, saved delivery records and PR checks.
+Issue numbers mark their current stage. Follow a single issue's live timeline on your Mac. [Local Temporal viewer](https://github.com/Oziomajnr/ChessTournamentManager/blob/main/docs/delivery.md#local-temporal-viewer)
+
+```mermaid
+flowchart LR
+    accTitle: Current issue positions in the delivery workflow
+    accDescr: Development flows into GitHub checks and Google Play. Each issue number appears at its current step.
+    subgraph development["Development"]
+        direction TB
+        backlog["Backlog<br/>#6"]:::occupied
+        ready["Ready for pickup<br/>Ready for local pickup<br/>#7"]:::occupied
+        plan["Planning"]
+        code["Implementation"]
+        review["Code review"]
+        backlog --> ready --> plan --> code --> review
+    end
+    subgraph integration["GitHub checks"]
+        direction TB
+        pull["Pull request"]
+        ci["CI checks"]
+        merge["Merge"]
+        queue["Release queue"]
+        pull --> ci --> merge --> queue
+    end
+    subgraph distribution["Google Play"]
+        direction TB
+        build["Build and sign"]
+        internal["Internal distribution"]
+        device["Device check"]
+        approval["Owner approval"]
+        rollout["Production rollout"]
+        published["Published at 100%"]
+        build --> internal --> device --> approval --> rollout --> published
+    end
+    development --> integration --> distribution
+    classDef occupied fill:#165b51,color:#ffffff,stroke:#38bba0,stroke-width:3px
+```
 
 ## Open issues
 
