@@ -11,8 +11,8 @@ flowchart LR
         backlog["Backlog<br/>#6"]:::occupied
         ready["Ready for pickup"]
         plan["Planning"]
-        code["Implementation<br/>Implementing locally<br/>#7"]:::occupied
-        review["Code review"]
+        code["Implementation"]
+        review["Code review<br/>Local review requested<br/>#7"]:::occupied
         backlog --> ready --> plan --> code --> review
     end
     subgraph integration["GitHub checks"]
@@ -42,4 +42,4 @@ flowchart LR
 | Issue | Stage | Next step | Evidence |
 | --- | --- | --- | --- |
 | [#6 Raise release DEX obfuscation from 0% to at least 25% by February 2027](https://github.com/Oziomajnr/ChessTournamentManager/issues/6) | Backlog | A maintainer can label this issue agent-ready. | — |
-| [#7 Update the transitive AndroidX Fragment dependency flagged by Google Play](https://github.com/Oziomajnr/ChessTournamentManager/issues/7) | Implementing locally | Oziomajnr implements the saved plan in the task worktree. | — |
+| [#7 Update the transitive AndroidX Fragment dependency flagged by Google Play](https://github.com/Oziomajnr/ChessTournamentManager/issues/7) | Local review requested | Complete the independent review for the submitted commit. | — |
