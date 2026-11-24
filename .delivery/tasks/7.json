@@ -40,5 +40,6 @@
       "The Play Console acceptance check remains open. Once Google Play processes the next release, record the version code and confirm that its Technical quality report no longer flags Fragment 1.1.0.",
       "The Gradle constraint is a reasonable way to upgrade the transitive dependency, and the note reports selection of Fragment 1.8.9, a successful release AAB build, and 25 passing JVM tests. This review had access only to the supplied diff and notes. Attach the actual release dependency insight output and build and JVM test results so those claims can be independently verified."
     ]
-  }
+  },
+  "pr": 11
 }
