@@ -25,7 +25,7 @@ androidx.fragment:fragment:1.1.0 -> 1.8.9
 
 ## Verification on November 25, 2026
 
-The full `:app:testDebugUnitTest` and `:app:connectedDebugAndroidTest` runs produced these JUnit XML totals. Both the local ARM64 and GitHub x86_64 Android 16 (API 36) emulators passed. The downloaded GitHub reports matched the local results. [JVM and lint reports](https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45440465195/artifacts/14943930974) · [Device test report](https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45440465195/artifacts/14943696696)
+The full `:app:testDebugUnitTest` and `:app:connectedDebugAndroidTest` runs produced these JUnit XML totals on commit `144516f` (Git tree `3ded7b6e2a75888c1766faeae7f37546e346aaa6` for `app/`). Both the local ARM64 and GitHub x86_64 Android 16 (API 36) emulators passed. The downloaded GitHub reports matched the local results. [JVM and lint reports](https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45442173680/artifacts/14944181408) · [Device test report](https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45442173680/artifacts/14943678533)
 
 | Suite | Tests | Failures | Errors | Skipped |
 | --- | ---: | ---: | ---: | ---: |
