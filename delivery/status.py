@@ -11,6 +11,7 @@ from typing import NamedTuple
 
 from delivery import task
 from delivery.adapters import github as gh
+from delivery.policy import post_upload_decision
 from delivery.status_graph import LANES, mermaid
 
 REPO_URL = f"https://github.com/{gh.REPO}"
@@ -59,6 +60,21 @@ def release_stage(candidate, notices):
             "Review this signed build in the production environment.",
             "approval",
         )
+    if f"post-upload-{build}" in notices and candidate.get("post_upload_checks"):
+        decision = post_upload_decision(candidate)
+        if decision:
+            stage = (
+                "Post-upload check failed"
+                if decision.action == "needs_attention"
+                else "Awaiting post-upload evidence"
+            )
+            return Position(stage, decision.reason, "reports")
+        if not candidate.get("smoke") and f"smoke-{build}" not in notices:
+            return Position(
+                "Post-upload checks passed",
+                "Test the store-installed build.",
+                "reports",
+            )
     smoke = candidate.get("smoke", {})
     if smoke.get("result") == "failed":
         return Position(

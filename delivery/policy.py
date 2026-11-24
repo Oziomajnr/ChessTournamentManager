@@ -44,6 +44,27 @@ def matches(record, artifact):
     return bool(record) and record.get("artifact") == artifact
 
 
+def post_upload_decision(candidate):
+    """Require one observation per planned check on the exact distributed artifact."""
+    reports = candidate.get("post_upload_reports", {})
+    waiting = None
+    for number, check in enumerate(candidate.get("post_upload_checks", []), 1):
+        report = reports.get(check)
+        if matches(report, artifact_id(candidate)):
+            if report.get("result") == "failed":
+                return Decision(
+                    "needs_attention",
+                    f"Post-upload check {number} failed: {report['evidence']}",
+                )
+            if report.get("result") == "passed":
+                continue
+        if waiting is None:
+            waiting = Decision(
+                "request_report", f"Waiting for post-upload check {number}: {check}"
+            )
+    return waiting
+
+
 def health_status(rows, stage_start, now, min_users, limits, max_age_days):
     """Use a complete, fresh period for every metric on the candidate's current stage."""
     if (
@@ -87,6 +108,9 @@ def release_action(candidate, test_status, production, health="insufficient"):
         return Decision("publish_test", "Publish this build to testers")
     if test_status != "live":
         return Decision("wait", "Waiting for availability on the testing channel")
+    report = post_upload_decision(candidate)
+    if report:
+        return report
     smoke = candidate.get("smoke")
     if not matches(smoke, artifact):
         return Decision(
