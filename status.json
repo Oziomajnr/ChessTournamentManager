@@ -114,9 +114,9 @@
       "title": "Update the transitive AndroidX Fragment dependency flagged by Google Play",
       "url": "https://github.com/Oziomajnr/ChessTournamentManager/issues/7",
       "state": "open",
-      "stage": "Internal distribution",
-      "detail": "Waiting for Play to confirm internal availability.",
-      "step": "internal",
+      "stage": "Awaiting post-upload evidence",
+      "detail": "Waiting for post-upload check 1: Post-release validation: after the next build is uploaded to Play, re-check the processed SDK report in Play Console and verify the Fragment 1.1.0 warning is gone for that release.",
+      "step": "reports",
       "links": [
         {
           "label": "PR #11",
