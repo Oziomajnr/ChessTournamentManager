@@ -13,6 +13,18 @@
     "submitted": {
       "action": "publish_test",
       "percent": 0
+    },
+    "post_upload_reports": {
+      "Post-release validation: after the next build is uploaded to Play, re-check the processed SDK report in Play Console and verify the Fragment 1.1.0 warning is gone for that release.": {
+        "artifact": {
+          "revision": "b3e4074f01e7d33465885033b9276e197e194f6a",
+          "build": 6,
+          "sha256": "5a9ab62367f98cfb5254d73f1124c671cec7c13bfdca89552c7c734e48c13acc"
+        },
+        "result": "passed",
+        "evidence": "On November 25, 2026, [Play Console internal release details](https://play.google.com/console/u/0/developers/7564052209764461710/app/4973075702656469376/tracks/4700444504015965590/releases/2/details) showed build 6 (0.1.2) available to internal testers. On the refreshed [Test and release overview](https://play.google.com/console/u/0/developers/7564052209764461710/app/4973075702656469376/test-and-release), the AndroidX Fragment 1.1.0 finding listed only version code 5 as affected. Build 6 had no entry in that list. I also downloaded the signed build 6 bundle, verified its SHA-256 against the release record, and read Fragment 1.8.9 from its packaged version metadata.",
+        "actor": "Oziomajnr"
+      }
     }
   },
   "last_build": 6,
