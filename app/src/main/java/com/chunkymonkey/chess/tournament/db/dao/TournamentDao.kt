@@ -5,7 +5,6 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import com.chunkymonkey.chess.tournament.db.entity.PlayerStanding
 import com.chunkymonkey.chess.tournament.db.entity.PlayerTournamentStatus
 import com.chunkymonkey.chess.tournament.db.entity.Tournament
@@ -27,8 +26,21 @@ interface TournamentDao {
     @Insert
     suspend fun insert(tournament: Tournament): Long
 
-    @Update
-    suspend fun update(tournament: Tournament)
+    @Query("UPDATE tournaments SET name = :name, timeControl = :timeControl, tiebreakConfig = :tiebreakConfig WHERE id = :id")
+    suspend fun updateSettings(id: Long, name: String, timeControl: String?, tiebreakConfig: String)
+
+    @Query("UPDATE tournaments SET shareCode = :shareCode WHERE id = :id AND shareCode IS NULL")
+    suspend fun setShareCode(id: Long, shareCode: String)
+
+    @Query("""
+        UPDATE tournaments SET currentRound = currentRound + 1, status = 'IN_PROGRESS'
+        WHERE id = :id AND currentRound = :expectedRound
+          AND currentRound < totalRounds AND status != 'COMPLETED'
+    """)
+    suspend fun advanceRound(id: Long, expectedRound: Int): Int
+
+    @Query("UPDATE tournaments SET status = 'COMPLETED' WHERE id = :id")
+    suspend fun complete(id: Long)
 
     @Delete
     suspend fun delete(tournament: Tournament)

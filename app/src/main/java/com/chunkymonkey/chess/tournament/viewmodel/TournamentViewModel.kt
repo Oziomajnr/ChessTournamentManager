@@ -3,6 +3,7 @@ package com.chunkymonkey.chess.tournament.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.chunkymonkey.chess.tournament.ChessTournamentApp
 import com.chunkymonkey.chess.tournament.analytics.AppAnalytics
 import com.chunkymonkey.chess.tournament.db.entity.Pairing
@@ -18,10 +19,11 @@ import com.chunkymonkey.chess.tournament.engine.PairingEngine
 import com.chunkymonkey.chess.tournament.engine.RoundRobinEngine
 import com.chunkymonkey.chess.tournament.engine.SwissPairingEngine
 import com.chunkymonkey.chess.tournament.engine.TiebreakCalculator
-import com.chunkymonkey.chess.tournament.billing.ProStateManager
 import com.chunkymonkey.chess.tournament.web.PublishResult
 import com.chunkymonkey.chess.tournament.web.WebPublisher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +32,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 
 sealed class PublishState {
     data object Idle : PublishState()
@@ -46,7 +50,6 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
     private val tournamentDao = db.tournamentDao()
     private val pairingDao = db.pairingDao()
     private val playerDao = db.playerDao()
-    private val proStateManager = ChessTournamentApp.getProStateManager(application)
 
     val allTournaments = tournamentDao.getAllTournaments()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -54,6 +57,9 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
     private val _selectedTournamentId = MutableStateFlow<Long?>(null)
     private val _roundError = MutableStateFlow<String?>(null)
     val roundError = _roundError.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private val roundGenerationMutex = Mutex()
+    private val _isGeneratingRound = MutableStateFlow(false)
+    val isGeneratingRound: StateFlow<Boolean> = _isGeneratingRound
 
     private val _publishState = MutableStateFlow<PublishState>(PublishState.Idle)
     val publishState: StateFlow<PublishState> = _publishState
@@ -89,7 +95,6 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
                 timeControl = timeControl, tiebreakConfig = tiebreakConfig
             )
             val tournamentId = tournamentDao.insert(tournament)
-            proStateManager.incrementTournamentCount()
 
             val players = playerDao.getPlayersByIds(playerIds)
                 .sortedByDescending { it.rating }
@@ -117,49 +122,69 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
         _roundError.value = null
     }
 
-    fun generateNextRound() {
+    fun generateNextRound(tournament: Tournament, onRoundPaired: (Tournament) -> Unit) {
         viewModelScope.launch {
-            _roundError.value = null
-            val tournament = selectedTournament.value ?: return@launch
-            if (tournament.currentRound >= tournament.totalRounds) return@launch
+            if (!roundGenerationMutex.tryLock()) return@launch
+            _isGeneratingRound.value = true
+            val pairedTournament = try {
+                _roundError.value = null
+                if (tournament.status == TournamentStatus.COMPLETED ||
+                    tournament.currentRound >= tournament.totalRounds
+                ) return@launch
 
-            if (tournament.currentRound > 0) {
-                val pending = pairingDao.getPendingCount(tournament.id, tournament.currentRound)
-                if (pending > 0) {
-                    _roundError.value = "Round ${tournament.currentRound} still has $pending pending result${if (pending > 1) "s" else ""}. Complete all results before generating the next round."
-                    return@launch
+                if (tournament.currentRound > 0) {
+                    val pending = pairingDao.getPendingCount(tournament.id, tournament.currentRound)
+                    if (pending > 0) {
+                        _roundError.value = "Round ${tournament.currentRound} still has $pending pending result${if (pending > 1) "s" else ""}. Complete all results before generating the next round."
+                        return@launch
+                    }
                 }
-            }
 
-            val nextRound = tournament.currentRound + 1
-            val currentStandings = tournamentDao.getTournamentStandingsOnce(tournament.id)
-            val activeStandings = currentStandings.filter { it.status == PlayerTournamentStatus.ACTIVE }
-            val previousPairings = pairingDao.getAllPairingsForTournament(tournament.id)
+                val nextRound = tournament.currentRound + 1
+                val currentStandings = tournamentDao.getTournamentStandingsOnce(tournament.id)
+                val activeStandings = currentStandings.filter { it.status == PlayerTournamentStatus.ACTIVE }
+                val previousPairings = pairingDao.getAllPairingsForTournament(tournament.id)
 
-            val engine: PairingEngine = when (tournament.type) {
-                TournamentType.SWISS -> SwissPairingEngine()
-                TournamentType.ROUND_ROBIN -> RoundRobinEngine()
-            }
-
-            val pairings = engine.generatePairings(
-                tournament.id, nextRound, activeStandings, previousPairings
-            )
-
-            pairingDao.insertAll(pairings)
-            tournamentDao.update(
-                tournament.copy(
-                    currentRound = nextRound,
-                    status = TournamentStatus.IN_PROGRESS
-                )
-            )
-
-            for (p in pairings) {
-                if (p.result == PairingResult.BYE) {
-                    recalculateStandings(tournament.id)
-                    break
+                val engine: PairingEngine = when (tournament.type) {
+                    TournamentType.SWISS -> SwissPairingEngine()
+                    TournamentType.ROUND_ROBIN -> RoundRobinEngine()
                 }
+
+                val pairings = withContext(Dispatchers.Default) {
+                    engine.generatePairings(
+                        tournament.id,
+                        nextRound,
+                        activeStandings,
+                        previousPairings
+                    )
+                }
+
+                val committed = db.withTransaction {
+                    if (tournamentDao.advanceRound(tournament.id, tournament.currentRound) == 0) {
+                        return@withTransaction false
+                    }
+                    pairingDao.insertAll(pairings)
+                    if (pairings.any { it.result == PairingResult.BYE }) {
+                        recalculateStandings(tournament.id)
+                    }
+                    true
+                }
+                if (!committed) return@launch
+
+                analytics.logRoundGenerated(nextRound, tournament.type)
+                if (pairings.any { it.blackPlayerId != null }) {
+                    tournament.copy(currentRound = nextRound, status = TournamentStatus.IN_PROGRESS)
+                } else null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _roundError.value = failure.localizedMessage ?: "Could not generate this round."
+                null
+            } finally {
+                _isGeneratingRound.value = false
+                roundGenerationMutex.unlock()
             }
-            analytics.logRoundGenerated(nextRound, tournament.type)
+            pairedTournament?.let(onRoundPaired)
         }
     }
 
@@ -189,13 +214,7 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
     fun updateTournamentSettings(name: String, timeControl: String?, tiebreakConfig: String) {
         viewModelScope.launch {
             val tournament = selectedTournament.value ?: return@launch
-            tournamentDao.update(
-                tournament.copy(
-                    name = name,
-                    timeControl = timeControl,
-                    tiebreakConfig = tiebreakConfig
-                )
-            )
+            tournamentDao.updateSettings(tournament.id, name, timeControl, tiebreakConfig)
             recalculateStandings(tournament.id)
         }
     }
@@ -256,11 +275,6 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
 
     fun publishToWeb() {
         viewModelScope.launch {
-            if (proStateManager.proFeaturesLocked.value) {
-                _publishState.value = PublishState.Error("PRO_REQUIRED")
-                analytics.logWebPublishFailure(AppAnalytics.publishFailureReasonCode("PRO_REQUIRED"))
-                return@launch
-            }
             _publishState.value = PublishState.Loading
             val tournament = selectedTournament.value
             if (tournament == null) {
@@ -275,7 +289,7 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
             when (val result = webPublisher.publish(tournament, currentStandings, allPairings, tournament.shareCode)) {
                 is PublishResult.Success -> {
                     if (tournament.shareCode == null) {
-                        tournamentDao.update(tournament.copy(shareCode = result.shareCode))
+                        tournamentDao.setShareCode(tournament.id, result.shareCode)
                     }
                     _publishState.value = PublishState.Success(result.url)
                     analytics.logWebPublishSuccess(firstPublish)
@@ -304,7 +318,7 @@ class TournamentViewModel(application: Application) : AndroidViewModel(applicati
     fun completeTournament() {
         viewModelScope.launch {
             val tournament = selectedTournament.value ?: return@launch
-            tournamentDao.update(tournament.copy(status = TournamentStatus.COMPLETED))
+            tournamentDao.complete(tournament.id)
             analytics.logTournamentCompleted()
         }
     }

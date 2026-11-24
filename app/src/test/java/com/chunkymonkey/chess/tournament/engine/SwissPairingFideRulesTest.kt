@@ -428,6 +428,33 @@ class SwissPairingFideRulesTest {
         }
     }
 
+    @Test(timeout = 2_000)
+    fun `bounded search fallback pairs a large constrained tournament promptly`() {
+        val playerCount = 128
+        val players = generatePlayers(playerCount, Random(2026))
+        val previousPairings = players.chunked(2).mapIndexed { boardIndex, pair ->
+            Pairing(
+                tournamentId = tournamentId,
+                roundNumber = 1,
+                board = boardIndex + 1,
+                whitePlayerId = pair[0].playerId,
+                blackPlayerId = pair[1].playerId,
+                result = PairingResult.DRAW
+            )
+        }
+        val constrainedEngine = SwissPairingEngine(maxSearchNodes = 1)
+
+        val pairings = constrainedEngine.generatePairings(
+            tournamentId = tournamentId,
+            roundNumber = 2,
+            players = players,
+            previousPairings = previousPairings
+        )
+
+        verifyAllPlayersPairedExactlyOnce(players, pairings, "bounded fallback")
+        verifyRule2_NoRematches(previousPairings, pairings, "bounded fallback")
+    }
+
     // -----------------------------------------------------------------------
     // Focused edge case tests
     // -----------------------------------------------------------------------

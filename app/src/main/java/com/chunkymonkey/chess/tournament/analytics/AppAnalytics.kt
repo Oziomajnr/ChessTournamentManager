@@ -87,27 +87,8 @@ class AppAnalytics(private val firebase: FirebaseAnalytics) {
         firebase.logEvent("backup_import", b)
     }
 
-    fun logPurchaseFlowStarted(productId: String) {
-        val b = Bundle().apply {
-            putString("product_id", productId)
-        }
-        firebase.logEvent("purchase_flow_started", b)
-    }
-
-    fun logPurchaseCompleted(productId: String) {
-        val b = Bundle().apply {
-            putString("product_id", productId)
-        }
-        firebase.logEvent("purchase_completed", b)
-    }
-
-    fun logRestorePurchasesTapped() {
-        firebase.logEvent("restore_purchases_tapped", null)
-    }
-
     companion object {
         fun publishFailureReasonCode(message: String): String = when {
-            message == "PRO_REQUIRED" -> "pro_required"
             message == "No tournament selected" -> "no_tournament"
             message.contains("not configured", ignoreCase = true) -> "not_configured"
             message.startsWith("Upload failed", ignoreCase = true) -> "upload_failed"
@@ -124,7 +105,6 @@ class AppAnalytics(private val firebase: FirebaseAnalytics) {
                 route.endsWith("/settings") -> "tournament_settings"
                 route.startsWith("tournament/") -> "tournament_detail"
                 route == "backup" -> "backup"
-                route == "upgrade" -> "upgrade"
                 else -> "unknown"
             }
         }

@@ -1,11 +1,13 @@
 # Chess Tournament Manager
 
-Android app for running chess tournaments: Swiss (FIDE C.04.1 style) and Round Robin pairings, standings, tiebreaks, backup/restore, optional web publishing, and Google Play Billing for Pro features.
+Android app for running chess tournaments: Swiss (FIDE C.04.1 style) and Round Robin pairings, standings, tiebreaks, backup/restore, and optional web publishing.
 
 ## Requirements
 
 - JDK 17
-- Android SDK (API 35 compile / target)
+- Android SDK Platform 36
+- Android Gradle Plugin 8.13.2 (via the version catalog)
+- Gradle 8.13 (via the Gradle wrapper)
 
 ## Setup
 
@@ -14,7 +16,6 @@ Android app for running chess tournaments: Swiss (FIDE C.04.1 style) and Round R
 3. Set `sdk.dir` to your Android SDK path.
 4. Optional: add Firebase keys for “Publish to web” (see `web/` and `FirebaseConfig.kt`).
 5. Optional: configure release signing in `local.properties` (keystore is not in the repo).
-6. **Premium / Remote Config**: Premium is disabled by default via Firebase Remote Config (`premium_required` = false). To enable premium later: add your project’s `google-services.json` to `app/`, add the Android app in Firebase Console, create the `premium_required` parameter in Remote Config and set it to `true`.
 
 ## Build
 
@@ -35,6 +36,22 @@ Release bundle:
 ```
 
 Includes simulation-based property tests for Swiss pairing (`SwissPairingFideRulesTest`).
+
+Release-policy verification:
+
+```bash
+./scripts/verify_play_policy.sh
+```
+
+This verifies the resolved release dependency graph, merged release manifest, and—when already
+built—the release AAB. It fails if the app stops targeting API 36 or if Google Play Billing is
+added back to the release.
+
+## Monetization
+
+The app is free and has no subscriptions or in-app purchases. Features are not gated behind a
+Pro tier. Do not add Google Play Billing or the `com.android.vending.BILLING` permission without
+revisiting the product decision, store declarations, privacy policy, and release-policy checks.
 
 ## Web viewer
 

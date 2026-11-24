@@ -58,10 +58,7 @@ import kotlin.math.log2
 fun CreateTournamentScreen(
     playerViewModel: PlayerViewModel,
     tournamentViewModel: TournamentViewModel,
-    onNavigateBack: () -> Unit,
-    remainingFree: Int = Int.MAX_VALUE,
-    proFeaturesLocked: Boolean = false,
-    onUpgradeClick: () -> Unit = {}
+    onNavigateBack: () -> Unit
 ) {
     val allPlayers by playerViewModel.allPlayers.collectAsState()
     var name by remember { mutableStateOf("") }
@@ -271,41 +268,6 @@ fun CreateTournamentScreen(
 
             item {
                 Spacer(modifier = Modifier.height(8.dp))
-
-                if (proFeaturesLocked) {
-                    androidx.compose.material3.Card(
-                        colors = androidx.compose.material3.CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                "Premium features locked",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                "Web publishing and backup/restore require Pro. Tournament creation is always free.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            TextButton(onClick = onUpgradeClick) {
-                                Text("View Pro plans")
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                } else if (remainingFree in 1 until Int.MAX_VALUE) {
-                    Text(
-                        text = "$remainingFree of ${ com.chunkymonkey.chess.tournament.billing.ProStateManager.FREE_TOURNAMENT_LIMIT } free tournaments with premium features remaining",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (remainingFree <= 3) MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
 
                 Button(
                     onClick = {

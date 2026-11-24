@@ -46,8 +46,7 @@ class MainActivity : ComponentActivity() {
                     playerViewModel = playerViewModel,
                     tournamentViewModel = tournamentViewModel,
                     backupViewModel = backupViewModel,
-                    billingManager = app.billingManager,
-                    proStateManager = app.proStateManager
+                    reviewPrompt = app.reviewPrompt
                 )
             }
         }

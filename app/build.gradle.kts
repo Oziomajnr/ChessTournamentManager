@@ -15,14 +15,15 @@ fun localProp(key: String, default: String = ""): String {
 
 android {
     namespace = "com.chunkymonkey.chess.tournament"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.chunkymonkey.chess.tournament"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        versionCode = 5
+        versionName = "0.1.2"
 
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${localProp("firebase.projectId")}\"")
         buildConfigField("String", "FIREBASE_API_KEY", "\"${localProp("firebase.apiKey")}\"")
@@ -53,12 +54,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 
     buildFeatures {
@@ -93,17 +94,19 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
 
     implementation(libs.navigation.compose)
+    implementation(libs.play.review)
+    implementation(libs.play.review.ktx)
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
-    implementation("com.android.billingclient:billing-ktx:7.1.1")
-
     implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.config)
     implementation(libs.firebase.analytics)
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:1.9.22")
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
 }

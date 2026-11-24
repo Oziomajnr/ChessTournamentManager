@@ -55,9 +55,7 @@ import java.util.Locale
 @Composable
 fun BackupScreen(
     backupViewModel: BackupViewModel,
-    onNavigateBack: () -> Unit,
-    proFeaturesLocked: Boolean = false,
-    onUpgradeClick: () -> Unit = {}
+    onNavigateBack: () -> Unit
 ) {
     val isLoading by backupViewModel.isLoading.collectAsState()
     val lastResult by backupViewModel.lastResult.collectAsState()
@@ -117,41 +115,6 @@ fun BackupScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (proFeaturesLocked) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Filled.Error,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Pro Feature",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                            Text(
-                                "Backup & Restore requires Pro after 10 tournaments.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                }
-            }
-
             // Export Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -187,16 +150,13 @@ fun BackupScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     FilledTonalButton(
-                        onClick = {
-                            if (proFeaturesLocked) onUpgradeClick()
-                            else exportLauncher.launch(defaultFilename)
-                        },
+                        onClick = { exportLauncher.launch(defaultFilename) },
                         enabled = !isLoading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Outlined.Save, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (proFeaturesLocked) "Export Backup File (Pro)" else "Export Backup File")
+                        Text("Export Backup File")
                     }
                 }
             }
@@ -236,16 +196,13 @@ fun BackupScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     OutlinedButton(
-                        onClick = {
-                            if (proFeaturesLocked) onUpgradeClick()
-                            else importLauncher.launch(arrayOf("application/json", "*/*"))
-                        },
+                        onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
                         enabled = !isLoading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (proFeaturesLocked) "Select Backup File (Pro)" else "Select Backup File")
+                        Text("Select Backup File")
                     }
                 }
             }

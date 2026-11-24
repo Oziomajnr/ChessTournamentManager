@@ -76,33 +76,45 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import com.chunkymonkey.chess.tournament.review.PlayReviewPrompt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TournamentDetailScreen(
+internal fun TournamentDetailScreen(
     tournamentId: Long,
     tournamentViewModel: TournamentViewModel,
     onNavigateBack: () -> Unit,
     onRoundClick: (Int) -> Unit,
     onSettingsClick: () -> Unit,
-    proFeaturesLocked: Boolean = false,
-    onUpgradeClick: () -> Unit = {}
+    reviewPrompt: PlayReviewPrompt
 ) {
     LaunchedEffect(tournamentId) {
         tournamentViewModel.selectTournament(tournamentId)
         tournamentViewModel.clearRoundError()
     }
 
-    val tournament by tournamentViewModel.selectedTournament.collectAsState()
+    val selectedTournament by tournamentViewModel.selectedTournament.collectAsState()
+    val tournament = selectedTournament?.takeIf { it.id == tournamentId }
     val standings by tournamentViewModel.standings.collectAsState()
     val roundNumbers by tournamentViewModel.roundNumbers.collectAsState()
     val roundError by tournamentViewModel.roundError.collectAsState()
+    val isGeneratingRound by tournamentViewModel.isGeneratingRound.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Standings", "Rounds", "Cross-Table")
     val context = LocalContext.current
     val publishState by tournamentViewModel.publishState.collectAsState()
     var showPublishDialog by remember { mutableStateOf(false) }
+    var endingTournament by remember(tournamentId) { mutableStateOf(false) }
+    val onRoundPaired = rememberRoundReviewHandler(
+        tournamentId,
+        visibleTournament = { tournament },
+        overviewAvailable = {
+            !endingTournament && !showPublishDialog && !tournamentViewModel.isGeneratingRound.value &&
+                tournamentViewModel.publishState.value == PublishState.Idle
+        },
+        prompt = reviewPrompt
+    )
 
     when (publishState) {
         is PublishState.Success, is PublishState.Error -> {
@@ -141,10 +153,7 @@ fun TournamentDetailScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = {
-                            if (proFeaturesLocked) onUpgradeClick()
-                            else tournamentViewModel.publishToWeb()
-                        },
+                        onClick = { tournamentViewModel.publishToWeb() },
                         enabled = publishState !is PublishState.Loading
                     ) {
                         if (publishState is PublishState.Loading) {
@@ -157,10 +166,7 @@ fun TournamentDetailScreen(
                             Icon(
                                 Icons.Default.CloudUpload,
                                 contentDescription = "Publish to Web",
-                                tint = if (proFeaturesLocked)
-                                    MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
-                                else
-                                    MaterialTheme.colorScheme.onPrimary
+                                tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
                     }
@@ -246,17 +252,31 @@ fun TournamentDetailScreen(
                                 t.currentRound < t.totalRounds
                             ) {
                                 Button(
-                                    onClick = { tournamentViewModel.generateNextRound() },
+                                    onClick = { tournamentViewModel.generateNextRound(t, onRoundPaired) },
+                                    enabled = !isGeneratingRound,
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Generate Round ${t.currentRound + 1}")
+                                    if (isGeneratingRound) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.width(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Generating...")
+                                    } else {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Generate Round ${t.currentRound + 1}")
+                                    }
                                 }
                             }
                             if (t.status == TournamentStatus.IN_PROGRESS) {
                                 OutlinedButton(
-                                    onClick = { tournamentViewModel.completeTournament() },
+                                    onClick = {
+                                        endingTournament = true
+                                        tournamentViewModel.completeTournament()
+                                    },
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         contentColor = MaterialTheme.colorScheme.error
                                     )

@@ -6,17 +6,13 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import com.chunkymonkey.chess.tournament.billing.BillingManager
-import com.chunkymonkey.chess.tournament.billing.ProStateManager
+import com.chunkymonkey.chess.tournament.review.PlayReviewPrompt
 import com.chunkymonkey.chess.tournament.ui.screens.BackupScreen
 import com.chunkymonkey.chess.tournament.ui.screens.CreateTournamentScreen
 import com.chunkymonkey.chess.tournament.ui.screens.HomeScreen
 import com.chunkymonkey.chess.tournament.ui.screens.RoundDetailScreen
 import com.chunkymonkey.chess.tournament.ui.screens.TournamentDetailScreen
 import com.chunkymonkey.chess.tournament.ui.screens.TournamentSettingsScreen
-import com.chunkymonkey.chess.tournament.ui.screens.UpgradeScreen
 import com.chunkymonkey.chess.tournament.viewmodel.BackupViewModel
 import com.chunkymonkey.chess.tournament.viewmodel.PlayerViewModel
 import com.chunkymonkey.chess.tournament.viewmodel.TournamentViewModel
@@ -28,7 +24,6 @@ object Routes {
     const val ROUND_DETAIL = "tournament/{tournamentId}/round/{roundNumber}"
     const val BACKUP = "backup"
     const val TOURNAMENT_SETTINGS = "tournament/{tournamentId}/settings"
-    const val UPGRADE = "upgrade"
 
     fun tournamentDetail(id: Long) = "tournament/$id"
     fun roundDetail(tournamentId: Long, roundNumber: Int) = "tournament/$tournamentId/round/$roundNumber"
@@ -36,16 +31,13 @@ object Routes {
 }
 
 @Composable
-fun ChessTournamentNavGraph(
+internal fun ChessTournamentNavGraph(
     navController: NavHostController,
     playerViewModel: PlayerViewModel,
     tournamentViewModel: TournamentViewModel,
     backupViewModel: BackupViewModel,
-    billingManager: BillingManager,
-    proStateManager: ProStateManager
+    reviewPrompt: PlayReviewPrompt
 ) {
-    val proFeaturesLocked by proStateManager.proFeaturesLocked.collectAsState()
-
     NavHost(
         navController = navController,
         startDestination = Routes.HOME
@@ -63,14 +55,10 @@ fun ChessTournamentNavGraph(
         }
 
         composable(Routes.CREATE_TOURNAMENT) {
-            val remainingFree by proStateManager.remainingFree.collectAsState()
             CreateTournamentScreen(
                 playerViewModel = playerViewModel,
                 tournamentViewModel = tournamentViewModel,
-                onNavigateBack = { navController.popBackStack() },
-                remainingFree = remainingFree,
-                proFeaturesLocked = proFeaturesLocked,
-                onUpgradeClick = { navController.navigate(Routes.UPGRADE) }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -82,15 +70,14 @@ fun ChessTournamentNavGraph(
             TournamentDetailScreen(
                 tournamentId = tournamentId,
                 tournamentViewModel = tournamentViewModel,
+                reviewPrompt = reviewPrompt,
                 onNavigateBack = { navController.popBackStack() },
                 onRoundClick = { roundNumber ->
                     navController.navigate(Routes.roundDetail(tournamentId, roundNumber))
                 },
                 onSettingsClick = {
                     navController.navigate(Routes.tournamentSettings(tournamentId))
-                },
-                proFeaturesLocked = proFeaturesLocked,
-                onUpgradeClick = { navController.navigate(Routes.UPGRADE) }
+                }
             )
         }
 
@@ -114,16 +101,6 @@ fun ChessTournamentNavGraph(
         composable(Routes.BACKUP) {
             BackupScreen(
                 backupViewModel = backupViewModel,
-                onNavigateBack = { navController.popBackStack() },
-                proFeaturesLocked = proFeaturesLocked,
-                onUpgradeClick = { navController.navigate(Routes.UPGRADE) }
-            )
-        }
-
-        composable(Routes.UPGRADE) {
-            UpgradeScreen(
-                billingManager = billingManager,
-                proStateManager = proStateManager,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
