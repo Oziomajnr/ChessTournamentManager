@@ -83,6 +83,7 @@ android {
 }
 
 dependencies {
+    constraints { implementation("androidx.fragment:fragment:1.8.9") }
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.lifecycle.viewmodel.compose)
