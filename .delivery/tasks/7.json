@@ -2,5 +2,11 @@
   "intake": {
     "title": "Update the transitive AndroidX Fragment dependency flagged by Google Play",
     "body": "Google Play Console flags `androidx.fragment:fragment:1.1.0` under **Technical quality** for release **5 (0.1.2)**. The SDK publisher recommends **1.2.1 or later** before publishing the next app update.\n\nGradle confirms that the current release still resolves `1.1.0` transitively. One path is `review-ktx:2.0.2` \u2192 `play-services-basement:18.4.0` \u2192 `fragment:1.1.0`. Firebase Analytics also reaches Fragment through Google Play services. Update the release dependency graph to use a compatible stable Fragment version that meets the publisher\u2019s minimum.\n\n### Acceptance checks\n\n- [ ] Run the command below and record the selected version. Every path in `releaseRuntimeClasspath` must resolve to `1.2.1` or later.\n- [ ] Build the release AAB and pass the existing JVM and Android device suites, including the round-pairing review tests.\n- [ ] After Play processes the next release, confirm that its SDK report no longer flags Fragment `1.1.0`.\n\n```sh\n./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency androidx.fragment:fragment\n```\n\n[AndroidX Fragment release notes](https://developer.android.com/jetpack/androidx/releases/fragment)\n"
-  }
+  },
+  "claim": [
+    "45412661287.1",
+    "plan",
+    "c7d9dcc3a80e4ceed312b4323d45fcaf971fcf21"
+  ],
+  "failures": 1
 }
