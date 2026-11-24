@@ -2,6 +2,29 @@
 
 The delivery policy accepts JSON and returns the next action. It runs with Python 3.9 or later and the standard library. The task host supplies issue state, review results and build checks. The distributor supplies testing availability, production availability, rollout percentage and health measurements. The artifact identity combines the source revision, build identifier and SHA-256 digest. Another project can replace the adapters and use the same policy.
 
+```mermaid
+flowchart TD
+    issue[Maintainer approves a task] --> plan[Plan and acceptance checks]
+    plan --> edit[Propose and commit changes]
+    edit --> pr[Open a pull request]
+    pr --> ci[Build and automated tests]
+    ci -->|Pass| review[Independent review of the same commit]
+    ci -->|Fail| repair[Repair or request maintainer help]
+    review -->|Changes requested| repair
+    repair -->|Retry| edit
+    review -->|Pass| merge[Merge under branch rules]
+    merge --> sign[Build and sign the release artifact]
+    sign --> internal[Distribute to internal testers]
+    internal --> smoke[Test the store-installed version]
+    smoke -->|Pass| approve[Owner approves this artifact]
+    smoke -->|Fail| fix[Open a repair cycle]
+    approve --> rollout[Staged production rollout]
+    rollout -->|Healthy at 10% and 50%| live[Verify 100% availability and close the issue]
+    rollout -->|Insufficient data| rollout
+    rollout -->|Regression| fix
+    fix --> edit
+```
+
 ```sh
 echo '{"kind":"task","state":{"planned":true,"has_change":true,"checks":"passed","review":"pending"}}' | python3 -m delivery.workflow
 python3 -m unittest discover -s delivery/tests
@@ -40,15 +63,19 @@ Sparse samples or pending Play review hold the current stage. A measured regress
 | Environment | Values | Purpose |
 | --- | --- | --- |
 | `delivery-agent` | `OPENAI_API_KEY` | Planner, code proposals and independent review |
+| `pr-creation` | `PR_APP_CLIENT_ID` environment variable, `PR_APP_PRIVATE_KEY` environment secret | Opens task PRs from the main-branch job |
 | `android-build` | `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`, `FIREBASE_WRITE_KEY` | Client configuration for the app’s Publish to web feature |
 | `android-signing` | `ANDROID_UPLOAD_KEYSTORE_B64`, `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_STORE_PASSWORD`, `ANDROID_UPLOAD_KEY_PASSWORD` | Android upload signature |
 | `play-publishing` | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Internal distribution, approved production transitions and Android vitals |
 | `production` | Required maintainer reviewer, administrator bypass disabled | Records approval for the exact signed artifact |
 
-Restrict each environment to the `main` branch. Set repository variable `DELIVERY_AGENT_ENABLED=true` when its key is configured and `DELIVERY_RELEASE_ENABLED=true` when release jobs are commissioned. The optional `DELIVERY_MODEL` variable selects the OpenAI model. The controller uses a separate `delivery-state` branch with conditional GitHub writes and a draft release per candidate. The app build, model and distribution jobs each receive their own environment.
+Restrict each environment to the `main` branch. Install a private GitHub App on this repository only, granting **Pull requests — Read and write** and the implicit metadata read permission. Store its client ID and private key in `pr-creation`. The opener checks the task, label and branch revision with read-only access before minting a short-lived installation token. GitHub's general Actions permission to create and approve PRs stays disabled. The next controller run can recover an existing PR after an interruption.
 
-Run the following hosted verification to exercise protected credential reads, the production reviewer configuration, Android packaging and signing without submitting an app release.
+Set repository variable `DELIVERY_AGENT_ENABLED=true` once the model key and PR App are configured, and `DELIVERY_RELEASE_ENABLED=true` when release jobs are commissioned. The optional `DELIVERY_MODEL` variable selects the OpenAI model. The controller uses a separate `delivery-state` branch with conditional GitHub writes and a draft release per candidate.
+
+The first hosted check verifies a GitHub App token scoped to this repository. The second exercises the production reviewer configuration, Android packaging and signing. Both leave delivery queues and store tracks untouched.
 
 ```sh
+gh workflow run tasks.yml --ref main -f verify_pr_app=true
 gh workflow run release.yml --ref main -f mode=verify
 ```
