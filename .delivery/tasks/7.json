@@ -30,16 +30,12 @@
   "local": {
     "actor": "Oziomajnr",
     "client": "a5f8e7c3da704061943fe560ae2da71d",
-    "submitted": "144516fd19f88536a0f235479db5dfa3c286b191",
-    "reviewing": "aa6417cbf203aefbf552946f59f74e62709a514f"
+    "submitted": "144516fd19f88536a0f235479db5dfa3c286b191"
   },
   "review": {
-    "sha": "144516fd19f88536a0f235479db5dfa3c286b191",
-    "passed": false,
-    "findings": [
-      "The Play Console acceptance check remains open. The verification document records that production version code 5 was flagged and leaves the candidate\u2019s SDK result pending. Once Google Play processes the candidate, record its version code and confirm that its Technical quality report does not flag Fragment 1.1.0.",
-      "The supplied verification document reports that all release runtime paths select Fragment 1.8.9, the release AAB builds and contains 1.8.9, and all 25 JVM tests and 9 RoundReviewTest scenarios pass. I could review those recorded results, but could not independently rerun Gradle or inspect the linked CI artifacts in this environment. Verify that the linked run tested the proposed commit before relying on those results for sign-off."
-    ]
+    "sha": "aa6417cbf203aefbf552946f59f74e62709a514f",
+    "passed": true,
+    "findings": []
   },
   "pr": 11,
   "repairs": 2
