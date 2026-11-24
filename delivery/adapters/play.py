@@ -10,6 +10,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
+from delivery.adapters.google_auth import token
 from delivery.agents import config
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -105,12 +106,16 @@ def updated_track(track, code, action, pct, notes, supersedes=()):
 
 class Play:
     def __init__(self):
-        self.package = config()["package"]
+        settings = config()
+        self.package = settings["package"]
         self.base = (
             "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/"
             + self.package
         )
-        self.token = os.environ["PLAY_ACCESS_TOKEN"]
+        credential = json.loads(os.environ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"])
+        if credential.get("client_email") != settings["publisher"]:
+            raise ValueError("The configured key belongs to a different Play publisher")
+        self.token = token(credential)
 
     def request(self, method, url, body=None, media=False):
         data = (
@@ -164,8 +169,7 @@ class Play:
     def observe(self, build):
         with self.inspection() as url:
             tracks = {
-                name: self.request("GET", url + "/tracks/" + name)
-                for name in ("internal", "production")
+                name: self.read_track(url, name) for name in ("internal", "production")
             }
         return {
             name: track_state(
@@ -177,6 +181,14 @@ class Play:
             )
             for name, t in tracks.items()
         }
+
+    def read_track(self, edit_url, name):
+        try:
+            return self.request("GET", edit_url + "/tracks/" + name)
+        except PlayError as error:
+            if error.status == 404:
+                return {"track": name, "releases": []}
+            raise
 
     def mutate(self, candidate, save, action, pct, bundle=None):
         """Persist and reconcile an edit across process loss, upload failures and commit timeouts."""
@@ -202,7 +214,7 @@ class Play:
             edit = intent["edit"] = self.new_edit()
             save()
         url = self.base + "/edits/" + edit
-        current = self.request("GET", url + "/tracks/" + track)
+        current = self.read_track(url, track)
         desired = updated_track(
             current,
             candidate["build"],

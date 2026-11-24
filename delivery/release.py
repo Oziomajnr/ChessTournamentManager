@@ -394,10 +394,13 @@ def drive():
             "run": os.environ["GITHUB_RUN_ID"],
         }
         save()
+        requested_checks = gh.Record(f"tasks/{c['issue']}").data["plan"]["checks"]
+        checklist = "\n".join("- " + check for check in requested_checks)
         gh.summary(
             f"### Production approval for build {c['build']}\n\nRevision `{c['revision']}`\n\nSHA-256 `{c['sha256']}`\n\n"
-            f"Notes: {c['notes']}\n\n[PR and CI evidence](https://github.com/{gh.REPO}/pull/{c['pr']}/checks)\n\n"
-            f"Store smoke: {c['smoke']['evidence']}\n\nThe generic smoke test covers app startup and navigation. Feature-specific real-account behavior requires its own evidence."
+            f"**Release notes**\n\n{c['notes']}\n\n[PR and CI results](https://github.com/{gh.REPO}/pull/{c['pr']}/checks)\n\n"
+            f"**Store smoke test**\n\n{c['smoke']['evidence']}\n\n**Requested feature checks**\n\n{checklist}\n\n"
+            "The store smoke test covers startup and tournament navigation. Treat a feature check as unverified unless its result appears in the linked CI or device evidence."
         )
         gh.output("action", "approve")
     elif action == "needs_attention":

@@ -4,6 +4,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -63,23 +64,49 @@ def dispatch_ci(branch):
     )
 
 
-def status(sha, ok):
+def review_gate(pr_number):
+    pr = gh.api(f"{gh.API}/pulls/{int(pr_number)}")
+    sha = pr["head"]["sha"]
+    tracked = re.fullmatch(r"delivery/task-(\d+)(?:-fix-\d+)?", pr["head"]["ref"])
+    state, description = (
+        "success",
+        "Regular pull request follows repository review rules",
+    )
+    if tracked and pr["head"]["repo"]["full_name"] == gh.REPO:
+        task = gh.Record(f"tasks/{int(tracked.group(1))}").data
+        review = task.get("review", {})
+        state, description = (
+            "pending",
+            "Waiting for independent review of this revision",
+        )
+        if task.get("pr") == int(pr_number) and review.get("sha") == sha:
+            state = "success" if review["passed"] else "failure"
+            description = (
+                "Independent review passed"
+                if review["passed"]
+                else "Review requires changes"
+            )
     gh.api(
         f"{gh.API}/statuses/{sha}",
         "POST",
-        {
-            "state": "success" if ok else "failure",
-            "context": "Independent delivery review",
-            "description": "Independent review passed"
-            if ok
-            else "Review requires changes",
-        },
+        {"state": state, "context": "Task review policy", "description": description},
     )
 
 
 def stop(record, issue, reason):
     gh.notify_once(record, issue, "needs-attention", reason)
     gh.labels(issue, add=["delivery-attention"], remove=["agent-ready"])
+
+
+def change_title(issue, title):
+    title = " ".join(title.split())[:150]
+    if re.search(
+        r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\s*:?\s+(?:\S*/\S*)?#\d+",
+        title,
+        re.IGNORECASE,
+    ):
+        return f"Implement delivery task {issue}"
+    return title or f"Implement delivery task {issue}"
 
 
 def select(item, record):
@@ -89,6 +116,7 @@ def select(item, record):
         s["intake"] = {"title": item["title"], "body": item.get("body") or ""}
         record.save(f"Record approved issue {n}")
     item = {**item, **s["intake"]}
+    item["title"] = change_title(n, item["title"])
     branch = f"delivery/task-{n}" + (
         f"-fix-{s['generation']}" if s.get("generation") else ""
     )
@@ -152,6 +180,7 @@ def select(item, record):
         )
         decision = next_task(True, True, checks, review, s.get("repairs", 0))
         if decision == "merge":
+            review_gate(pr["number"])
             subprocess.run(
                 [
                     "gh",
@@ -295,7 +324,7 @@ def apply():
             "findings": result["findings"],
         }
         record.save("Record independent review")
-        status(head, result["passed"])
+        review_gate(s["pr"])
         if result["findings"]:
             gh.notify_once(
                 record,

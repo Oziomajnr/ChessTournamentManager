@@ -23,6 +23,7 @@ jobs:
       issues: write
       pull-requests: write
       actions: write
+      statuses: write
     outputs:
       role: ${{ steps.task.outputs.role }}
     steps:

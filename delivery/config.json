@@ -1,6 +1,7 @@
 {
   "editable_roots": ["app/src/main/", "app/src/test/", "app/src/androidTest/", "docs/"],
   "package": "com.chunkymonkey.chess.tournament",
+  "publisher": "play-publisher@chess-tournament-manager-cea30.iam.gserviceaccount.com",
   "health": {
     "min_daily_users": 100,
     "max_age_days": 4,

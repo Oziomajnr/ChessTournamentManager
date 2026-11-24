@@ -68,13 +68,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - id: auth
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          credentials_json: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          token_format: access_token
-          create_credentials_file: false
-          access_token_scopes: https://www.googleapis.com/auth/androidpublisher,https://www.googleapis.com/auth/playdeveloperreporting
       - if: inputs.mode == 'smoke'
         run: python3 -m delivery.release smoke
         env:
@@ -85,7 +78,7 @@ jobs:
       - id: drive
         env:
           GH_TOKEN: ${{ github.token }}
-          PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           MODE: ${{ inputs.mode }}
         run: |
           if [ "$MODE" = verify ]; then
