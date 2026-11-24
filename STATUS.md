@@ -19,8 +19,8 @@ flowchart LR
         direction TB
         pull["Pull request"]
         ci["CI checks"]
-        merge["Merge<br/>Awaiting merge<br/>#7"]:::occupied
-        queue["Release queue"]
+        merge["Merge"]
+        queue["Release queue<br/>#7"]:::occupied
         pull --> ci --> merge --> queue
     end
     subgraph distribution["Google Play"]
@@ -43,4 +43,4 @@ flowchart LR
 | Issue | Stage | Next step | Evidence |
 | --- | --- | --- | --- |
 | [#6 Raise release DEX obfuscation from 0% to at least 25% by February 2027](https://github.com/Oziomajnr/ChessTournamentManager/issues/6) | Backlog | A maintainer can label this issue agent-ready. | — |
-| [#7 Update the transitive AndroidX Fragment dependency flagged by Google Play](https://github.com/Oziomajnr/ChessTournamentManager/issues/7) | Awaiting merge | Merge when GitHub branch protection permits it. | [PR #11](https://github.com/Oziomajnr/ChessTournamentManager/pull/11) · [CI](https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45499538696) · [Commit aa6417c](https://github.com/Oziomajnr/ChessTournamentManager/commit/aa6417cbf203aefbf552946f59f74e62709a514f) |
+| [#7 Update the transitive AndroidX Fragment dependency flagged by Google Play](https://github.com/Oziomajnr/ChessTournamentManager/issues/7) | Release queue | Select the recorded merge for internal distribution. | [PR #11](https://github.com/Oziomajnr/ChessTournamentManager/pull/11) · [Commit aa6417c](https://github.com/Oziomajnr/ChessTournamentManager/commit/aa6417cbf203aefbf552946f59f74e62709a514f) |

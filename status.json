@@ -114,17 +114,13 @@
       "title": "Update the transitive AndroidX Fragment dependency flagged by Google Play",
       "url": "https://github.com/Oziomajnr/ChessTournamentManager/issues/7",
       "state": "open",
-      "stage": "Awaiting merge",
-      "detail": "Merge when GitHub branch protection permits it.",
-      "step": "merge",
+      "stage": "Release queue",
+      "detail": "Select the recorded merge for internal distribution.",
+      "step": "queue",
       "links": [
         {
           "label": "PR #11",
           "url": "https://github.com/Oziomajnr/ChessTournamentManager/pull/11"
-        },
-        {
-          "label": "CI",
-          "url": "https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45499538696"
         },
         {
           "label": "Commit aa6417c",
