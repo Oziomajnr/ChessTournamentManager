@@ -97,7 +97,9 @@ flowchart TD
     merge --> build["Build the merged commit with a fresh version code"]
     build --> sign["Sign the AAB and archive it in a draft GitHub release"]
     sign --> upload["Upload to Play internal testing"]
-    upload -->|Live on internal track| install["Check Play install, version, launch and tournament list"]
+    upload -->|Live on internal track| reports{"Planned distributor checks pass?"}
+    reports -->|Passed or none planned| install["Check Play install, version, launch and tournament list"]
+    reports -->|Failed| repair
     install --> smoke{"Device test passes?"}
 
     %% Production rollout
@@ -127,7 +129,7 @@ The controller tracks one signed bundle by its merge commit, version code and SH
 
 1. **Queue and pick up the work.** Apply `agent-ready` to an issue. In the local Codex client, ask “Pick up the next agent-ready issue” or name the issue number. Codex works in a separate checkout and submits its reviewed commit to GitHub. GitHub runs CI, merges under branch protection, and adds `delivery-release` to the issue.
 2. **Build and distribute internally.** The release workflow picks up one recorded merge at a time, assigns a fresh version code, and signs the AAB with the protected upload key. Its draft GitHub release contains `candidate.zip` with the AAB and a manifest recording the commit, version code and SHA-256. The workflow uploads that bundle to Play internal testing.
-3. **Test the Play install.** On an enrolled tester device, install or update through Google Play. From a trusted checkout, run `python3 -m delivery.adapters.android_smoke --serial DEVICE_SERIAL --watch` with ADB and an authenticated maintainer GitHub CLI. The worker checks the installer, version, launch and tournament list. The native review card needs a separate eligible-account check. [Review-card test procedure](docs/in-app-review-plan.md)
+3. **Verify the internal build.** Record each planned distributor check against the published version code and bundle digest. On an enrolled tester device, install or update through Google Play. From a trusted checkout, run `python3 -m delivery.adapters.android_smoke --serial DEVICE_SERIAL --watch` with ADB and an authenticated maintainer GitHub CLI. The worker checks the installer, version, launch and tournament list. [Post-upload evidence](docs/delivery.md#internal-testing-and-production) · [Review-card test procedure](docs/in-app-review-plan.md)
 4. **Approve production once.** Open the **Deliver a release** run awaiting review. Check the release notes, device result and bundle digest, then select **Review deployments** and approve `production`. The controller promotes the same version to 10%, then 50%, then 100%. Insufficient crash or ANR data holds the current stage. The issue closes once Play reports full availability. [Release runs](https://github.com/Oziomajnr/ChessTournamentManager/actions/workflows/release.yml) · [Workflow graph and health thresholds](docs/delivery.md)
 
 ### An app change already merged outside the task workflow

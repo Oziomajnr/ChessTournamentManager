@@ -41,6 +41,7 @@ LANES = [
         [
             ("build", "Build and sign"),
             ("internal", "Internal distribution"),
+            ("reports", "Post-upload checks"),
             ("device", "Device check"),
             ("approval", "Owner approval"),
             ("rollout", "Production rollout"),

@@ -16,7 +16,9 @@ flowchart TD
     repair -->|Retry| edit
     merge --> sign[Build and sign the release artifact]
     sign --> internal[Distribute to internal testers]
-    internal --> smoke[Test the store-installed version]
+    internal --> reports{Required distributor checks}
+    reports -->|Pass or none planned| smoke[Test the store-installed version]
+    reports -->|Fail| fix
     smoke -->|Pass| approve[Owner approves this artifact]
     smoke -->|Fail| fix[Open a repair cycle]
     approve --> rollout[Staged production rollout]
@@ -82,6 +84,17 @@ The observer checks GitHub every 30 seconds and processes new `status.json` comm
 ## Internal testing and production
 
 One candidate advances at a time. The controller reserves a new version code, builds the merged revision, verifies the package and version inside the AAB, and signs it in a separate job. A draft GitHub release stores one archive containing the signed AAB and its manifest. The controller verifies its SHA-256 before internal upload and checks the version and SHA returned by Play. Subsequent stages promote the same version.
+
+Put checks that depend on the internally published artifact in the plan’s `post_upload_checks` list. Code review assesses the implementation and tests before merge. After Play confirms internal availability, the controller posts the numbered checks and signed artifact identity on the issue. Earlier plans with a check explicitly prefixed `Post-release validation:` or `Post-upload validation:` use the same stage.
+
+A maintainer reads the distributor report for the candidate version and records each result. Run the following command with the artifact JSON from the issue, the check number, and an observation identifying the build and report. Use `failed` when the processed report shows the issue persists. A pending report keeps the candidate in internal testing.
+
+```bash
+gh workflow run release.yml --ref main -f mode=post-upload -f artifact="$ARTIFACT_JSON" \
+  -f check=1 -f result=passed -f evidence="$OBSERVED_RESULT"
+```
+
+The release record binds each result to the commit, version code and bundle digest. A failed check starts a repair cycle. Production approval requires all planned reports and the installed-device check to pass for that artifact.
 
 Use a dedicated Android device or emulator enrolled in internal testing with Play automatic updates enabled. Run the worker from a trusted checkout with ADB on PATH and an authenticated maintainer GitHub CLI. It waits for Google Play to install the exact candidate, launches the app, opens Tournaments and reports the result against the candidate identity.
 
