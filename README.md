@@ -2,7 +2,7 @@
 
 Android app for running chess tournaments: Swiss (FIDE C.04.1 style) and Round Robin pairings, standings, tiebreaks, backup/restore, and optional web publishing.
 
-[Live issue status](https://github.com/Oziomajnr/ChessTournamentManager/blob/delivery-state/STATUS.md) · [Agentic delivery graph](#agentic-delivery-graph) · [Release instructions](#releasing-to-google-play)
+[Local Temporal viewer](docs/delivery.md#local-temporal-viewer) · [Issue graph on GitHub](https://github.com/Oziomajnr/ChessTournamentManager/blob/delivery-state/STATUS.md) · [Agentic delivery graph](#agentic-delivery-graph) · [Release instructions](#releasing-to-google-play)
 
 ## Requirements
 
@@ -64,7 +64,7 @@ Static site and Firebase rules live under `web/`. Deploy with the Firebase CLI a
 
 ## Agentic delivery graph
 
-A maintainer labels an issue `agent-ready`, then asks local Codex to pick it up. GitHub tracks the issue, runs CI and delivers the reviewed commit to Google Play. The live view shows the stage, next step and available evidence for each issue. [Issue delivery status](https://github.com/Oziomajnr/ChessTournamentManager/blob/delivery-state/STATUS.md) · [Local pickup](docs/delivery.md#local-codex-pickup) · [Delivery policy](delivery/policy.py)
+A maintainer labels an issue `agent-ready`, then asks local Codex to pick it up. GitHub tracks the issue, runs CI and delivers the reviewed commit to Google Play. The GitHub graph places each issue at its current step. Open its workflow in the local Temporal Web UI to follow recorded stage changes as they arrive. [Local Temporal viewer](docs/delivery.md#local-temporal-viewer) · [Local pickup](docs/delivery.md#local-codex-pickup) · [Delivery policy](delivery/policy.py)
 
 ```mermaid
 ---

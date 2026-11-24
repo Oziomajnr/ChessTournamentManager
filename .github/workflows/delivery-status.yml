@@ -2,11 +2,14 @@ name: Issue delivery status
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['delivery/status*.py', '.github/workflows/delivery-status.yml']
   issues:
     types: [opened, edited, reopened, labeled, unlabeled, closed, deleted, transferred]
   workflow_run:
     workflows: ["Deliver a task", "Deliver a release", "Android CI"]
-    types: [completed]
+    types: [in_progress, completed]
   schedule:
     - cron: '11,41 * * * *'
 
@@ -34,7 +37,7 @@ jobs:
           path: state-data
           sparse-checkout: .delivery
           persist-credentials: false
-      - name: Refresh the issue table and run summary
+      - name: Publish the issue graph, live viewer data and run summary
         env:
           GH_TOKEN: ${{ github.token }}
           HOSTED_AGENT_ENABLED: ${{ vars.DELIVERY_AGENT_ENABLED }}

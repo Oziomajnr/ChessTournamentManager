@@ -17,6 +17,7 @@ release-keystore.jks
 .env.local
 __pycache__/
 /.delivery-worktrees/
+/.delivery-temporal/
 
 # Firebase local cache
 web/.firebase/

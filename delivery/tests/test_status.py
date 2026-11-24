@@ -1,5 +1,7 @@
-import base64
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from delivery import status
@@ -67,10 +69,12 @@ class IssueStatusTest(unittest.TestCase):
             "observed_percent": 10,
             "submitted": {"action": "promote", "percent": 50},
         }
-        stage, detail = status.release_stage(advance, [])
-        self.assertEqual(stage, "Production rollout")
-        self.assertIn("10% was confirmed", detail)
-        self.assertIn("confirm 50%", detail)
+        position = status.release_stage(advance, [])
+        self.assertEqual(
+            (position.stage, position.step), ("Production rollout", "rollout")
+        )
+        self.assertIn("10% was confirmed", position.detail)
+        self.assertIn("confirm 50%", position.detail)
         self.assertEqual(
             self.stage({"production": {"percent": 100}}), "Published at 100%"
         )
@@ -79,21 +83,123 @@ class IssueStatusTest(unittest.TestCase):
 
     def test_board_escapes_titles_links_evidence_and_skips_unchanged_commits(self):
         with patch.object(status.gh, "trusted_intake", return_value=True):
-            view = status.render(
+            board = status.collect(
                 [self.issue], {7: {"claim": ["123.2", "plan", "sha"]}}, {}
             )
+        view = status.render(board)
         self.assertIn(r"Update \[SDK\] \| &lt;b&gt;", view)
         self.assertIn("actions/runs/123/attempts/2", view)
-        existing = {"sha": "abc", "content": base64.b64encode(view.encode()).decode()}
+        self.assertNotIn("Update [SDK]", "\n".join(status.mermaid(board)))
         with (
-            patch.object(status.gh, "optional", return_value=existing),
-            patch.object(status.gh, "api") as write,
+            tempfile.TemporaryDirectory() as temp,
+            patch.object(status.task, "commit_files") as write,
         ):
-            status.publish(view)
-            write.assert_not_called()
+            root = Path(temp)
+            status.commit_view(root, "head", board, view)
+            branch, head, _, files = write.call_args.args
+            self.assertEqual((branch, head), (status.gh.STATE_BRANCH, "head"))
+            self.assertEqual(set(files), {"STATUS.md", "status.json"})
+            self.assertEqual(json.loads(files["status.json"]), board)
+            for name, value in files.items():
+                (root / name).write_text(value)
+            status.commit_view(root, "head", board, view)
+            write.assert_called_once()
 
     def test_board_only_offers_pickup_for_maintainer_approved_labels(self):
         with patch.object(status.gh, "trusted_intake", return_value=False):
-            view = status.render([self.issue], {}, {})
+            view = status.render(status.collect([self.issue], {}, {}))
         self.assertIn("Awaiting maintainer", view)
         self.assertNotIn("Ready for local pickup", view)
+
+    def test_graph_moves_each_issue_once_and_keeps_other_issues_in_place(self):
+        other = {**self.issue, "number": 8}
+        closed = {**self.issue, "number": 9, "state": "closed"}
+        cases = [
+            ({}, {}, "ready", "#7 #8"),
+            ({"local": {"actor": "owner"}}, {}, "plan", "#8"),
+            (
+                {"plan": {"checks": ["test"]}, "local": {"actor": "owner"}},
+                {},
+                "code",
+                "#8",
+            ),
+            ({"local": {"reviewing": "abc"}}, {}, "review", "#8"),
+            ({"merged": "revision"}, {}, "queue", "#8"),
+            (
+                {},
+                {
+                    "active": {
+                        "issue": 7,
+                        "sha256": "signed",
+                        "approval_request": {"run": 2},
+                    }
+                },
+                "approval",
+                "#8",
+            ),
+            ({"production": {"percent": 100}}, {}, "published", "#8"),
+        ]
+        with patch.object(status.gh, "trusted_intake", return_value=True):
+            for state, release, step, ready in cases:
+                with self.subTest(step=step):
+                    board = status.collect(
+                        [self.issue, other, closed], {7: state}, release
+                    )
+                    graph = "\n".join(status.mermaid(board))
+                    self.assertEqual(graph.count("#7"), 1)
+                    self.assertIn(
+                        ready,
+                        next(line for line in graph.splitlines() if 'ready["' in line),
+                    )
+                    self.assertIn(
+                        "#7",
+                        next(
+                            line for line in graph.splitlines() if f'{step}["' in line
+                        ),
+                    )
+                    self.assertIn(
+                        '#9"]:::occupied',
+                        next(line for line in graph.splitlines() if 'closed["' in line),
+                    )
+                    self.assertEqual(board["issues"][0]["step"], step)
+
+    def test_no_issues_still_draws_the_route_without_occupied_nodes(self):
+        text = status.render(status.collect([], {}, {}))
+        self.assertIn("development --> integration --> distribution", text)
+        self.assertNotIn(":::occupied", text)
+        self.assertIn("No open issues.", text)
+
+    def test_racing_state_write_rebuilds_the_graph_from_new_records(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state_dir = Path(temp) / ".delivery"
+            (state_dir / "tasks").mkdir(parents=True)
+
+            def advance(*_, **kwargs):
+                (state_dir / "tasks/7.json").write_text('{"local":{"actor":"owner"}}')
+
+            with (
+                patch.object(status.gh, "issues", return_value=[self.issue]),
+                patch.object(status.gh, "trusted_intake", return_value=True),
+                patch.object(
+                    status.subprocess, "check_output", side_effect=["first", "new"]
+                ),
+                patch.object(status.subprocess, "run", side_effect=advance),
+                patch.object(status.gh, "api", return_value={"object": {"sha": "new"}}),
+                patch.object(
+                    status.task,
+                    "commit_files",
+                    side_effect=[status.gh.GitHubError("changed", 409), None],
+                ) as write,
+            ):
+                status.refresh(state_dir, False, True)
+            previous, current = [c.args[3] for c in write.call_args_list]
+            self.assertEqual(
+                json.loads(previous["status.json"])["issues"][0]["step"], "ready"
+            )
+            self.assertEqual(
+                json.loads(current["status.json"])["issues"][0]["step"], "plan"
+            )
+            self.assertIn(
+                'plan["Planning<br/>Planning locally<br/>#7"]:::occupied',
+                current["STATUS.md"],
+            )
