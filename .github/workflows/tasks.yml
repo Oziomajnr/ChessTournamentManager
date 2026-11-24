@@ -3,6 +3,9 @@ name: Deliver a task
 on:
   issues:
     types: [labeled]
+  workflow_run:
+    workflows: ["Android CI"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       verify_pr_app:
@@ -20,8 +23,11 @@ concurrency:
 jobs:
   choose:
     if: >-
-      ${{ github.ref == 'refs/heads/main' && !inputs.verify_pr_app && vars.DELIVERY_AGENT_ENABLED == 'true' &&
-          (github.event_name != 'issues' || github.event.label.name == 'agent-ready') }}
+      ${{ github.ref == 'refs/heads/main' && !inputs.verify_pr_app &&
+          (github.event_name != 'issues' || github.event.label.name == 'agent-ready') &&
+          (github.event_name != 'workflow_run' ||
+           (github.event.workflow_run.head_repository.full_name == github.repository &&
+            startsWith(github.event.workflow_run.head_branch, 'delivery/task-'))) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -38,6 +44,7 @@ jobs:
       - id: task
         env:
           GH_TOKEN: ${{ github.token }}
+          HOSTED_AGENT_ENABLED: ${{ vars.DELIVERY_AGENT_ENABLED }}
         run: python3 -m delivery.task choose
       - if: steps.task.outputs.role != '' && steps.task.outputs.role != 'open-pr'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -47,7 +54,7 @@ jobs:
           retention-days: 2
   agent:
     needs: choose
-    if: needs.choose.outputs.role != '' && needs.choose.outputs.role != 'open-pr'
+    if: vars.DELIVERY_AGENT_ENABLED == 'true' && needs.choose.outputs.role != '' && needs.choose.outputs.role != 'open-pr'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: delivery-agent

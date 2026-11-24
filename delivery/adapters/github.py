@@ -27,6 +27,7 @@ def api(path, method="GET", body=None):
         input=json.dumps(body) if body is not None else None,
         text=True,
         capture_output=True,
+        check=False,
     )
     if cp.returncode:
         status = re.search(r"HTTP (\d{3})", cp.stderr)
@@ -127,11 +128,16 @@ def labels(issue, add=(), remove=()):
                 raise
 
 
-def issues(label):
+def dispatch(workflow):
+    api(f"{API}/actions/workflows/{workflow}/dispatches", "POST", {"ref": "main"})
+
+
+def issues(label=None, state="open"):
     page = 1
+    label_filter = f"&labels={label}" if label else ""
     while True:
         batch = api(
-            f"{API}/issues?state=open&labels={label}&sort=created&direction=asc&per_page=100&page={page}"
+            f"{API}/issues?state={state}{label_filter}&sort=created&direction=asc&per_page=100&page={page}"
         )
         yield from (item for item in batch if "pull_request" not in item)
         if len(batch) < 100:

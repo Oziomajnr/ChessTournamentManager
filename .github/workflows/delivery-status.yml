@@ -1,0 +1,41 @@
+name: Issue delivery status
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened, edited, reopened, labeled, unlabeled, closed, deleted, transferred]
+  workflow_run:
+    workflows: ["Deliver a task", "Deliver a release", "Android CI"]
+    types: [completed]
+  schedule:
+    - cron: '11,41 * * * *'
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: read
+  actions: read
+concurrency:
+  group: issue-delivery-status
+  cancel-in-progress: false
+
+jobs:
+  status:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: delivery-state
+          path: state-data
+          sparse-checkout: .delivery
+          persist-credentials: false
+      - name: Refresh the issue table and run summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOSTED_AGENT_ENABLED: ${{ vars.DELIVERY_AGENT_ENABLED }}
+        run: python3 -m delivery.status --state-dir state-data/.delivery --publish

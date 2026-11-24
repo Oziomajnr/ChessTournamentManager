@@ -1,5 +1,6 @@
 {
   "editable_roots": ["app/src/main/", "app/src/test/", "app/src/androidTest/", "docs/"],
+  "local_dependency_constraints": {"app/build.gradle.kts": ["androidx.fragment:fragment"]},
   "package": "com.chunkymonkey.chess.tournament",
   "publisher": "play-publisher@chess-tournament-manager-cea30.iam.gserviceaccount.com",
   "health": {
