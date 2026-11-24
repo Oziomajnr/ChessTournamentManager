@@ -8,7 +8,7 @@
     "plan",
     "c7d9dcc3a80e4ceed312b4323d45fcaf971fcf21"
   ],
-  "failures": 1,
+  "failures": 0,
   "plan": {
     "acceptance": [
       "Running `./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency androidx.fragment:fragment` for the release variant reports a selected `androidx.fragment:fragment` version of `1.2.1` or newer, with no remaining `releaseRuntimeClasspath` path selecting `1.1.0`.",
