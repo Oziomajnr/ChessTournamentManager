@@ -27,11 +27,12 @@ flowchart LR
         direction TB
         build["Build and sign"]
         internal["Internal distribution"]
+        reports["Post-upload checks"]
         device["Device check"]
         approval["Owner approval"]
         rollout["Production rollout"]
         published["Published at 100%"]
-        build --> internal --> device --> approval --> rollout --> published
+        build --> internal --> reports --> device --> approval --> rollout --> published
     end
     development --> integration --> distribution
     classDef occupied fill:#165b51,color:#ffffff,stroke:#38bba0,stroke-width:3px
