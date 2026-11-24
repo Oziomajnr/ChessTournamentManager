@@ -1,0 +1,9 @@
+/.github/ @Oziomajnr
+/delivery/ @Oziomajnr
+/scripts/ @Oziomajnr
+/gradle/ @Oziomajnr
+/gradle.properties @Oziomajnr
+/gradlew* @Oziomajnr
+/**/*.gradle.kts @Oziomajnr
+/*.gradle.kts @Oziomajnr
+/web/firestore.rules @Oziomajnr

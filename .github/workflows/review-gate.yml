@@ -1,0 +1,29 @@
+name: Evaluate task review policy
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to reconcile
+        required: true
+        type: number
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+jobs:
+  record:
+    if: github.event_name == 'pull_request_target' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      # This privileged job only reads a PR identifier and runs code from the base branch.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+        run: python3 -c 'import os; from delivery.task import review_gate; review_gate(int(os.environ["PR_NUMBER"]))'

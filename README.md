@@ -73,3 +73,7 @@ Or: `gh auth login`, then `gh repo create Oziomajnr/chess-tournament-manager --p
 ## License
 
 See repository license (add one if you publish publicly).
+
+## Automated delivery
+
+A maintainer can hand a task to the delivery workflow from chat or by labeling a GitHub issue. The workflow tracks that issue through tests, independent review, internal distribution, production approval and rollout. [Delivery workflow and device setup](docs/delivery.md)

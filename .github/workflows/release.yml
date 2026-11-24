@@ -1,0 +1,205 @@
+name: Deliver a release
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [advance, verify, smoke]
+        default: advance
+      artifact:
+        description: Exact artifact identity supplied by the trusted device worker
+        required: false
+      result:
+        description: Installed-build test result
+        required: false
+      evidence:
+        description: Device observations and any unverified checks
+        required: false
+
+permissions: {}
+concurrency:
+  group: release-controller
+  cancel-in-progress: false
+
+jobs:
+  select:
+    if: github.ref == 'refs/heads/main' && (vars.DELIVERY_RELEASE_ENABLED == 'true' || inputs.mode == 'verify')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: read
+    outputs:
+      active: ${{ steps.select.outputs.active }}
+      revision: ${{ steps.select.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$MODE" = verify ]; then
+            echo "active=true" >> "$GITHUB_OUTPUT"
+            echo "revision=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          else
+            python3 -m delivery.release select
+          fi
+
+  drive:
+    needs: select
+    if: needs.select.outputs.active == 'true'
+    environment: play-publishing
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      actions: read
+      deployments: read
+    outputs:
+      action: ${{ steps.drive.outputs.action }}
+      build: ${{ steps.drive.outputs.build }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - if: inputs.mode == 'smoke'
+        run: python3 -m delivery.release smoke
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SMOKE_ARTIFACT: ${{ inputs.artifact }}
+          SMOKE_RESULT: ${{ inputs.result }}
+          SMOKE_EVIDENCE: ${{ inputs.evidence }}
+      - id: drive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          if [ "$MODE" = verify ]; then
+            python3 -m delivery.release verify
+          else
+            python3 -m delivery.release drive
+          fi
+
+  build:
+    needs: [select, drive]
+    if: needs.drive.outputs.action == 'build'
+    environment: android-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: control
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.select.outputs.revision }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+      - run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+      - working-directory: control
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_WRITE_KEY: ${{ secrets.FIREBASE_WRITE_KEY }}
+        run: python3 -m delivery.adapters.android configure ../candidate
+      - working-directory: candidate
+        env:
+          BUILD: ${{ needs.drive.outputs.build }}
+        run: |
+          ./gradlew --console=plain -PdeliveryVersionCode="$BUILD" :app:bundleRelease
+          ./scripts/verify_play_policy.sh --require-bundle
+          tool="$RUNNER_TEMP/bundletool.jar"
+          curl --fail --silent --show-error --location https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar --output "$tool"
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $tool" | sha256sum --check
+          bundle=app/build/outputs/bundle/release/app-release.aab
+          test "$(java -jar "$tool" dump manifest --bundle="$bundle" --xpath='/manifest/@android:versionCode')" = "$BUILD"
+          test "$(java -jar "$tool" dump manifest --bundle="$bundle" --xpath='/manifest/@package')" = com.chunkymonkey.chess.tournament
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: unsigned-app
+          path: candidate/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 2
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: android-signing
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: unsigned-app
+          path: bundle
+      - run: python3 -m delivery.adapters.android sign bundle/app-release.aab
+        env:
+          ANDROID_UPLOAD_KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+      - if: inputs.mode != 'verify'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: signed-app
+          path: bundle/app-release.aab
+          if-no-files-found: error
+          retention-days: 2
+  register:
+    needs: [select, drive, sign]
+    if: inputs.mode != 'verify'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: signed-app
+          path: bundle
+      - run: python3 -m delivery.release register
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED_BUNDLE: bundle/app-release.aab
+          CANDIDATE_REVISION: ${{ needs.select.outputs.revision }}
+          CANDIDATE_BUILD: ${{ needs.drive.outputs.build }}
+  authorize:
+    needs: drive
+    if: needs.drive.outputs.action == 'approve'
+    environment: production
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      deployments: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: python3 -m delivery.release approve
+        env:
+          GH_TOKEN: ${{ github.token }}
