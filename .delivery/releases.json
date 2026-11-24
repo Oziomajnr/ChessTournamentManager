@@ -15,5 +15,8 @@
       "percent": 0
     }
   },
-  "last_build": 6
+  "last_build": 6,
+  "notices": [
+    "post-upload-6"
+  ]
 }
