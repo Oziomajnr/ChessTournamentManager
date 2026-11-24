@@ -1,0 +1,10 @@
+{
+  "editable_roots": ["app/src/main/", "app/src/test/", "app/src/androidTest/", "docs/"],
+  "package": "com.chunkymonkey.chess.tournament",
+  "health": {
+    "min_daily_users": 100,
+    "max_age_days": 4,
+    "max_crash_percent": 1.09,
+    "max_anr_percent": 0.47
+  }
+}

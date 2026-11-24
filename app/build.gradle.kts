@@ -22,7 +22,9 @@ android {
         minSdk = 24
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 5
+        versionCode = providers.gradleProperty("deliveryVersionCode").orNull?.let {
+            it.toInt().also { code -> require(code in 1..2_100_000_000) }
+        } ?: 5
         versionName = "0.1.2"
 
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${localProp("firebase.projectId")}\"")
@@ -49,7 +51,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (localProp("signing.storeFile").isNotBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

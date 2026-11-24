@@ -1,76 +1,55 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$repo_root"
+cd "$(dirname "$0")/.."
+report=$(mktemp)
+trap 'rm -f "$report"' EXIT
 
-dependency_report="$(mktemp)"
-cleanup() {
-    rm -f "$dependency_report"
-}
-trap cleanup EXIT
-
-./gradlew --console=plain \
-    :app:dependencyInsight \
-    --dependency com.android.billingclient \
-    --configuration releaseRuntimeClasspath \
-    :app:processReleaseMainManifest | tee "$dependency_report"
-
-if rg -q 'com\.android\.billingclient:' "$dependency_report"; then
-    echo "Play policy check failed: the release runtime classpath contains Google Play Billing." >&2
-    exit 1
+./gradlew --console=plain :app:dependencyInsight --dependency com.android.billingclient \
+  --configuration releaseRuntimeClasspath :app:processReleaseManifest > "$report"
+grep -q 'No dependencies matching given input were found' "$report"
+if grep -q 'com\.android\.billingclient:' "$report"; then
+  echo 'Release dependencies contain Play Billing' >&2
+  exit 1
 fi
 
-if ! rg -q 'No dependencies matching given input were found' "$dependency_report"; then
-    echo "Play policy check failed: unable to prove that Google Play Billing is absent." >&2
-    exit 1
-fi
+python3 - "$@" <<'PY'
+import argparse
+from pathlib import Path
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
-manifest_path="$(find app/build/intermediates/merged_manifests/release \
-    -name AndroidManifest.xml -type f -print -quit 2>/dev/null || true)"
+args = argparse.ArgumentParser()
+args.add_argument('--require-bundle', action='store_true')
+settings = args.parse_args()
+manifest = Path('app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml')
+sdk = ElementTree.parse(manifest).getroot().find('uses-sdk')
+if sdk is None or sdk.get('{http://schemas.android.com/apk/res/android}targetSdkVersion') != '36':
+    raise SystemExit('Expected target SDK 36 in the merged release manifest')
 
-if [[ -z "$manifest_path" ]]; then
-    echo "Play policy check failed: merged release manifest was not generated." >&2
-    exit 1
-fi
+metadata = ('com.android.vending.BILLING', 'com.google.android.play.billingclient.version')
+source_markers = (*metadata, 'com.android.billingclient')
+def reject_markers(source, data, markers):
+    if any(value.encode(enc) in data for value in markers for enc in ('utf-8', 'utf-16le')):
+        raise SystemExit(f'Billing marker in {source}')
 
-if ! rg -q 'android:targetSdkVersion="36"' "$manifest_path"; then
-    echo "Play policy check failed: merged release manifest does not target API 36." >&2
-    exit 1
-fi
+reject_markers(manifest, manifest.read_bytes(), metadata)
+for source in [*Path('app/src').rglob('*'), Path('app/build.gradle.kts'), Path('gradle/libs.versions.toml')]:
+    if source.is_file() and source.suffix in ('.kt', '.java', '.xml', '.kts', '.toml'):
+        reject_markers(source, source.read_bytes(), source_markers)
 
-if rg -q 'com\.android\.vending\.BILLING|com\.google\.android\.play\.billingclient\.version' \
-    "$manifest_path"; then
-    echo "Play policy check failed: merged release manifest contains Play Billing metadata." >&2
-    exit 1
-fi
-
-if rg -q 'com\.android\.billingclient|com\.android\.vending\.BILLING|com\.google\.android\.play\.billingclient\.version' \
-    app/src app/build.gradle.kts gradle/libs.versions.toml; then
-    echo "Play policy check failed: source or build configuration references Play Billing." >&2
-    exit 1
-fi
-
-bundle_path="app/build/outputs/bundle/release/app-release.aab"
-if [[ -f "$bundle_path" ]]; then
-    while IFS= read -r dex_entry; do
-        if unzip -p "$bundle_path" "$dex_entry" | strings | \
-            rg -q 'com/android/billingclient|BillingClient|pro_lifetime|pro_monthly'; then
-            echo "Play policy check failed: $dex_entry contains a Play Billing marker." >&2
-            exit 1
-        fi
-    done < <(unzip -Z1 "$bundle_path" | rg '^base/dex/.*\.dex$')
-
-    if unzip -p "$bundle_path" base/manifest/AndroidManifest.xml | strings | \
-        rg -q 'com\.android\.vending\.BILLING|com\.google\.android\.play\.billingclient\.version'; then
-        echo "Play policy check failed: the release bundle manifest contains Play Billing metadata." >&2
-        exit 1
-    fi
-
-    echo "Release bundle scan passed: no Billing classes, product IDs, permission, or version metadata."
-else
-    echo "Release bundle scan skipped: run ./gradlew bundleRelease to generate $bundle_path."
-fi
-
-echo "Play policy check passed: target API 36 and no Google Play Billing dependency or manifest metadata."
+bundle = Path('app/build/outputs/bundle/release/app-release.aab')
+if bundle.is_file():
+    with ZipFile(bundle) as archive:
+        dex = [n for n in archive.namelist() if n.startswith('base/dex/') and n.endswith('.dex')]
+        if not dex:
+            raise SystemExit('Release bundle has no base DEX files')
+        for name in dex:
+            reject_markers(name, archive.read(name), ('com/android/billingclient', 'BillingClient', 'pro_lifetime', 'pro_monthly'))
+        name = 'base/manifest/AndroidManifest.xml'
+        reject_markers(name, archive.read(name), metadata)
+    print('Scanned the release AAB.')
+elif settings.require_bundle:
+    raise SystemExit('Missing release AAB')
+print('Release dependency, manifest and source checks passed.')
+PY
