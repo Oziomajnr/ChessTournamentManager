@@ -12,12 +12,12 @@ flowchart LR
         ready["Ready for pickup"]
         plan["Planning"]
         code["Implementation"]
-        review["Code review"]
+        review["Code review<br/>Changes requested<br/>#7"]:::occupied
         backlog --> ready --> plan --> code --> review
     end
     subgraph integration["GitHub checks"]
         direction TB
-        pull["Pull request<br/>Opening pull request<br/>#7"]:::occupied
+        pull["Pull request"]
         ci["CI checks"]
         merge["Merge"]
         queue["Release queue"]
@@ -42,4 +42,4 @@ flowchart LR
 | Issue | Stage | Next step | Evidence |
 | --- | --- | --- | --- |
 | [#6 Raise release DEX obfuscation from 0% to at least 25% by February 2027](https://github.com/Oziomajnr/ChessTournamentManager/issues/6) | Backlog | A maintainer can label this issue agent-ready. | — |
-| [#7 Update the transitive AndroidX Fragment dependency flagged by Google Play](https://github.com/Oziomajnr/ChessTournamentManager/issues/7) | Opening pull request | The main-branch GitHub App job processes the submitted commit. | [Commit 61420e5](https://github.com/Oziomajnr/ChessTournamentManager/commit/61420e5c6850904a4cc0c3e70a1d866b61840545) |
+| [#7 Update the transitive AndroidX Fragment dependency flagged by Google Play](https://github.com/Oziomajnr/ChessTournamentManager/issues/7) | Changes requested | Address the independent review and submit a new commit. | [PR #11](https://github.com/Oziomajnr/ChessTournamentManager/pull/11) · [Commit 61420e5](https://github.com/Oziomajnr/ChessTournamentManager/commit/61420e5c6850904a4cc0c3e70a1d866b61840545) |
