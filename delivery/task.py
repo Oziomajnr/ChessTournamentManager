@@ -124,6 +124,18 @@ def change_title(issue, title):
     return title or f"Implement delivery task {issue}"
 
 
+def task_branch(issue, state):
+    branch = f"delivery/task-{int(issue)}"
+    return branch + (
+        f"-fix-{int(state['generation'])}" if state.get("generation") else ""
+    )
+
+
+def task_pulls(branch):
+    owner = gh.REPO.split("/")[0]
+    return gh.api(f"{gh.API}/pulls?head={owner}:{branch}&base=main&state=all")
+
+
 def select(item, record):
     n = item["number"]
     s = record.data
@@ -132,13 +144,23 @@ def select(item, record):
         record.save(f"Record approved issue {n}")
     item = {**item, **s["intake"]}
     item["title"] = change_title(n, item["title"])
-    branch = f"delivery/task-{n}" + (
-        f"-fix-{s['generation']}" if s.get("generation") else ""
-    )
+    branch = task_branch(n, s)
     target = gh.api(gh.API + "/git/ref/heads/main")["object"]["sha"]
     existing = gh.optional(f"{gh.API}/git/ref/heads/{branch}")
     head = existing["object"]["sha"] if existing else target
     pr = gh.api(f"{gh.API}/pulls/{s['pr']}") if s.get("pr") else None
+    if pr and (
+        pr["base"]["ref"] != "main"
+        or pr["base"]["repo"]["full_name"] != gh.REPO
+        or pr["head"]["ref"] != branch
+        or (pr["head"]["repo"] or {}).get("full_name") != gh.REPO
+    ):
+        stop(
+            record,
+            n,
+            "The task pull request's source or target changed. " + pr["html_url"],
+        )
+        return
     if pr and pr["merged_at"]:
         s.update(merged=pr["merge_commit_sha"])
         record.save(f"Task {n} merged")
@@ -159,29 +181,36 @@ def select(item, record):
         )
         return
     # Recover a branch or PR created just before the previous runner stopped.
-    if existing and not pr and head != target:
-        links = gh.api(
-            f"{gh.API}/pulls?head={gh.REPO.split('/')[0]}:{branch}&base=main&state=all"
-        )
-        pr = links[0] if links else open_pr(n, branch, item["title"])
-        s["pr"] = pr["number"]
-        record.save("Recover task pull request")
-        dispatch_ci(branch)
-        return
+    if existing and not pr and s.get("plan"):
+        links = task_pulls(branch)
+        if links:
+            s["pr"] = links[0]["number"]
+            record.save("Record existing task pull request")
+            return
+        if head != target and gh.api(f"{gh.API}/compare/{target}...{head}")["ahead_by"]:
+            gh.output("role", "open-pr")
+            gh.output("issue", n)
+            gh.output("revision", head)
+            return True
     if not s.get("plan"):
         role, detail = next_task(False, bool(pr)), ""
     elif not pr:
         role, detail = next_task(True, False), ""
     else:
-        if pr["head"]["sha"] != head or pr["head"]["repo"]["full_name"] != gh.REPO:
+        if pr["head"]["sha"] != head:
             raise ValueError("Task pull request has an unexpected head")
         relation = gh.api(f"{gh.API}/compare/{target}...{head}")
         if relation["behind_by"]:
-            gh.api(
-                f"{gh.API}/pulls/{pr['number']}/update-branch",
-                "PUT",
-                {"expected_head_sha": head},
-            )
+            try:
+                gh.api(gh.API + "/merges", "POST", {"base": branch, "head": target})
+            except gh.GitHubError as err:
+                if err.status != 409:
+                    raise
+                stop(
+                    record,
+                    n,
+                    "The task branch has a merge conflict with main. " + pr["html_url"],
+                )
             return
         checks, detail = check_result(head)
         if checks == "missing":
@@ -196,21 +225,16 @@ def select(item, record):
         decision = next_task(True, True, checks, review, s.get("repairs", 0))
         if decision == "merge":
             review_gate(pr["number"])
-            subprocess.run(
-                [
-                    "gh",
-                    "pr",
-                    "merge",
-                    str(pr["number"]),
-                    "--repo",
-                    gh.REPO,
-                    "--auto",
-                    "--squash",
-                    "--match-head-commit",
-                    head,
-                ],
-                check=True,
-            )
+            try:
+                gh.api(
+                    f"{gh.API}/pulls/{pr['number']}/merge",
+                    "PUT",
+                    {"sha": head, "merge_method": "squash"},
+                )
+            except gh.GitHubError as err:
+                # A required check, review, or new revision will be reconciled on the next run.
+                if err.status not in (405, 409):
+                    raise
             return
         if decision == "needs_attention":
             stop(
@@ -273,17 +297,38 @@ def choose():
     gh.output("role", "")
 
 
-def open_pr(n, branch, title):
-    return gh.api(
-        gh.API + "/pulls",
-        "POST",
-        {
-            "title": title[:180],
-            "head": branch,
-            "base": "main",
-            "body": f"Refs #{n}. The delivery controller will close the issue after production availability.",
-        },
-    )
+def prepare_pr():
+    """Validate the live issue and branch with a read-only token before minting an App token."""
+    if os.environ["GITHUB_REF"] != "refs/heads/main":
+        raise ValueError("PR creation requires the main branch")
+    n, head = int(os.environ["TASK_ISSUE"]), os.environ["TASK_REVISION"]
+    if n < 1 or not re.fullmatch(r"[0-9a-f]{40}", head):
+        raise ValueError("Invalid task issue or revision")
+    issue = gh.api(f"{gh.API}/issues/{n}")
+    if (
+        issue["state"] != "open"
+        or "pull_request" in issue
+        or not any(label["name"] == "agent-ready" for label in issue["labels"])
+        or not gh.trusted_intake(n)
+    ):
+        return
+    s = gh.Record(f"tasks/{n}").data
+    if s.get("pr") or not s.get("plan") or not s.get("intake"):
+        return
+    branch = task_branch(n, s)
+    ref = gh.optional(f"{gh.API}/git/ref/heads/{branch}")
+    if not ref or ref["object"]["sha"] != head or task_pulls(branch):
+        return
+    if gh.api(f"{gh.API}/compare/main...{head}")["ahead_by"] < 1:
+        return
+    body = {
+        "title": change_title(n, s["intake"]["title"]),
+        "head": branch,
+        "base": "main",
+        "body": f"Refs #{n}. The delivery controller will close the issue after production availability.",
+    }
+    (Path(os.environ["RUNNER_TEMP"]) / "task-pr.json").write_text(json.dumps(body))
+    gh.output("create", "true")
 
 
 def commit_files(branch, head, title, changes):
@@ -349,9 +394,7 @@ def apply():
                 + "\n".join("- " + x for x in result["findings"]),
             )
     else:
-        branch = f"delivery/task-{n}" + (
-            f"-fix-{s['generation']}" if s.get("generation") else ""
-        )
+        branch = task_branch(n, s)
         files = source_tree(head, config()["editable_roots"])
         changes = replacements(files, result["edits"], config()["editable_roots"])
         if not gh.optional(f"{gh.API}/git/ref/heads/{branch}"):
@@ -360,16 +403,20 @@ def apply():
                 "POST",
                 {"ref": "refs/heads/" + branch, "sha": head},
             )
-        commit_files(branch, head, f"Task {n}: " + req["title"][:90], changes)
-        if not s.get("pr"):
-            s["pr"] = open_pr(n, branch, req["title"])["number"]
-        record.save("Persist task pull request")
-        dispatch_ci(branch)
+        revision = commit_files(
+            branch, head, f"Task {n}: " + req["title"][:90], changes
+        )
+        if s.get("pr"):
+            dispatch_ci(branch)
+        else:
+            gh.output("issue", n)
+            gh.output("revision", revision)
     s["failures"] = 0
     record.save("Finish task agent turn")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["choose", "apply"])
-    {"choose": choose, "apply": apply}[parser.parse_args().command]()
+    commands = {"choose": choose, "apply": apply, "prepare-pr": prepare_pr}
+    parser.add_argument("command", choices=commands)
+    commands[parser.parse_args().command]()

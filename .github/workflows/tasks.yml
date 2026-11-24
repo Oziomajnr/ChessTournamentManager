@@ -4,6 +4,11 @@ on:
   issues:
     types: [labeled]
   workflow_dispatch:
+    inputs:
+      verify_pr_app:
+        description: Verify this repository's PR App installation without opening a pull request
+        type: boolean
+        default: false
   schedule:
     - cron: '3,13,23,33,43,53 * * * *'
 
@@ -15,24 +20,26 @@ concurrency:
 jobs:
   choose:
     if: >-
-      ${{ github.ref == 'refs/heads/main' && vars.DELIVERY_AGENT_ENABLED == 'true' &&
+      ${{ github.ref == 'refs/heads/main' && !inputs.verify_pr_app && vars.DELIVERY_AGENT_ENABLED == 'true' &&
           (github.event_name != 'issues' || github.event.label.name == 'agent-ready') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
-      pull-requests: write
+      pull-requests: read
       actions: write
       statuses: write
     outputs:
       role: ${{ steps.task.outputs.role }}
+      issue: ${{ steps.task.outputs.issue }}
+      revision: ${{ steps.task.outputs.revision }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - id: task
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -m delivery.task choose
-      - if: steps.task.outputs.role != ''
+      - if: steps.task.outputs.role != '' && steps.task.outputs.role != 'open-pr'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: task-input
@@ -40,7 +47,7 @@ jobs:
           retention-days: 2
   agent:
     needs: choose
-    if: needs.choose.outputs.role != ''
+    if: needs.choose.outputs.role != '' && needs.choose.outputs.role != 'open-pr'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: delivery-agent
@@ -69,9 +76,12 @@ jobs:
     permissions:
       contents: write
       issues: write
-      pull-requests: write
+      pull-requests: read
       statuses: write
       actions: write
+    outputs:
+      issue: ${{ steps.apply.outputs.issue }}
+      revision: ${{ steps.apply.outputs.revision }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -80,6 +90,51 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: agent-result
-      - env:
+      - id: apply
+        env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -m delivery.task apply
+  open-pr:
+    needs: [choose, apply]
+    if: >-
+      ${{ !cancelled() && github.ref == 'refs/heads/main' &&
+          ((github.event_name == 'workflow_dispatch' && inputs.verify_pr_app) ||
+           (needs.choose.result == 'success' && needs.choose.outputs.role == 'open-pr') ||
+           (needs.apply.result == 'success' && needs.apply.outputs.revision != '')) }}
+    runs-on: ubuntu-latest
+    environment: pr-creation
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - id: prepare
+        if: ${{ !inputs.verify_pr_app }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TASK_ISSUE: ${{ needs.apply.outputs.issue || needs.choose.outputs.issue }}
+          TASK_REVISION: ${{ needs.apply.outputs.revision || needs.choose.outputs.revision }}
+        run: python3 -m delivery.task prepare-pr
+      - id: app
+        if: inputs.verify_pr_app || steps.prepare.outputs.create == 'true'
+        # With no owner or repository override, GitHub scopes the token to this repository.
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc
+        with:
+          client-id: ${{ vars.PR_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PR_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+      - name: Verify repository scope
+        if: inputs.verify_pr_app || steps.prepare.outputs.create == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          gh api installation/repositories |
+            jq -e --arg repo "$GITHUB_REPOSITORY" '.total_count == 1 and [.repositories[].full_name] == [$repo]'
+      - name: Open the task pull request
+        if: steps.prepare.outputs.create == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/pulls" --input "$RUNNER_TEMP/task-pr.json" --jq .html_url
