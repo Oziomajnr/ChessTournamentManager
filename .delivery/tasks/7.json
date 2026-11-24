@@ -8,5 +8,20 @@
     "plan",
     "c7d9dcc3a80e4ceed312b4323d45fcaf971fcf21"
   ],
-  "failures": 1
+  "failures": 1,
+  "plan": {
+    "acceptance": [
+      "Running `./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency androidx.fragment:fragment` for the release variant reports a selected `androidx.fragment:fragment` version of `1.2.1` or newer, with no remaining `releaseRuntimeClasspath` path selecting `1.1.0`.",
+      "The next release AAB builds successfully and the existing JVM and Android device test suites pass, including the round-pairing review instrumentation tests in `RoundReviewTest`.",
+      "After uploading the next release and once Google Play finishes processing it, the Play Console SDK report for that release no longer flags `androidx.fragment:fragment:1.1.0` under Technical quality."
+    ],
+    "checks": [
+      "Dependency verification: run `./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency androidx.fragment:fragment` and record the selected Fragment version and the contributing dependency paths.",
+      "Release artifact verification: run `./gradlew :app:bundleRelease` to confirm the release AAB still builds with the updated dependency graph.",
+      "JVM regression suite: run the existing unit tests, at minimum `./gradlew :app:testDebugUnitTest`, to confirm no regressions in pairing, review-attempt storage, and related logic.",
+      "Android device regression suite: run the existing instrumentation tests, at minimum `./gradlew :app:connectedDebugAndroidTest`, and confirm the round-pairing review scenarios in `app/src/androidTest/java/com/chunkymonkey/chess/tournament/review/RoundReviewTest.kt` still pass.",
+      "Post-release validation: after the next build is uploaded to Play, re-check the processed SDK report in Play Console and verify the Fragment 1.1.0 warning is gone for that release."
+    ],
+    "release_notes": "Updated app dependencies so release builds no longer include the outdated AndroidX Fragment 1.1.0 version flagged by Google Play."
+  }
 }
