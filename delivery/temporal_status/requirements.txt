@@ -1,0 +1,2 @@
+# Supports the repository's Python 3.9 minimum and the macOS system interpreter.
+temporalio==1.18.2

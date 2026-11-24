@@ -14,8 +14,6 @@ from delivery.adapters import github as gh
 from delivery.status_graph import LANES, mermaid
 
 REPO_URL = f"https://github.com/{gh.REPO}"
-_owner, _repo = gh.REPO.split("/")
-PAGES_URL = f"https://{_owner.lower()}.github.io/{_repo}/"
 
 
 class Position(NamedTuple):
@@ -314,9 +312,7 @@ def render(board):
     text = [
         "# Issue delivery status",
         "",
-        f"[Watch the live workflow graph]({PAGES_URL})",
-        "",
-        "Issue numbers mark their current stage. The live viewer refreshes automatically.",
+        f"Issue numbers mark their current stage. Follow a single issue's live timeline on your Mac. [Local Temporal viewer]({REPO_URL}/blob/main/docs/delivery.md#local-temporal-viewer)",
         "",
         *mermaid(board),
         "",

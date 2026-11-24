@@ -1,4 +1,4 @@
-"""Workflow steps shared by the GitHub diagram and the live viewer."""
+"""Workflow steps published in the GitHub diagram and the Temporal observer's feed."""
 
 import re
 from collections import defaultdict

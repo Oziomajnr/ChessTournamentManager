@@ -64,7 +64,20 @@ The GitHub App opens the PR. GitHub runs lint, JVM and emulator tests, build and
 
 The status workflow publishes the GitHub graph and the viewer's data together on `delivery-state`. Issue activity, local handoffs, controller and CI runs, and a pending production approval trigger updates. A half-hourly schedule reconciles outstanding work. Issue numbers appear at their current stage, including repairs, blocked releases and confirmed Play rollouts. The table below the GitHub graph links to the available evidence. [Status on GitHub](https://github.com/Oziomajnr/ChessTournamentManager/blob/delivery-state/STATUS.md) · [Status workflow](../.github/workflows/delivery-status.yml)
 
-The GitHub Pages viewer checks for a new published snapshot every 30 seconds while visible and checks again when you return to the tab. Select an issue to follow it through transitions. The selection is saved in the URL, so you can share a direct link to an issue's graph. [Live viewer](https://oziomajnr.github.io/ChessTournamentManager/)
+### Local Temporal viewer
+
+Open the `chess-delivery` namespace on the Mac and select a workflow such as `issue-7`. Its **Current Details** gives the observed stage and next action. Its **Timeline** shows updates named for the stages the issue reached. The `DeliveryStage` search attribute can filter the workflow list. [Open Temporal on this Mac](http://127.0.0.1:8233/namespaces/chess-delivery/workflows) · [Temporal Timeline](https://temporal.io/blog/lets-visualize-a-workflow)
+
+Use Python 3.9 or later, an authenticated GitHub CLI and the Temporal CLI (`brew install temporal` on a new Mac). Run the following commands from the main checkout.
+
+```sh
+bash scripts/temporal-status.sh start
+bash scripts/temporal-status.sh status
+```
+
+The launcher runs the loopback-only Temporal development server and a read-only observer for the current Mac login session. It keeps the SQLite history, sync checkpoint and logs in the ignored `.delivery-temporal/` directory. Stop both with `bash scripts/temporal-status.sh stop`, and use `start` again after logging back in. [Temporal local service](https://docs.temporal.io/cli/command-reference/server)
+
+The observer checks GitHub every 30 seconds and processes new `status.json` commits in order, including those published while the Mac was asleep. Events carry GitHub's recorded time. History begins with the first published snapshot. A closed issue completes its execution. Reopening it starts another run under the same workflow ID. Local Codex handles implementation and GitHub continues to enforce CI, merge and production approval.
 
 ## Internal testing and production
 
