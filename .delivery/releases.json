@@ -10,10 +10,9 @@
     "supersedes": [],
     "build": 6,
     "sha256": "5a9ab62367f98cfb5254d73f1124c671cec7c13bfdca89552c7c734e48c13acc",
-    "intent": {
+    "submitted": {
       "action": "publish_test",
-      "percent": 0,
-      "edit": "15386886022637375198"
+      "percent": 0
     }
   },
   "last_build": 6
