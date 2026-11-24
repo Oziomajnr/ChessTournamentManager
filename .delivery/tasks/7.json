@@ -23,5 +23,8 @@
       "Post-release validation: after the next build is uploaded to Play, re-check the processed SDK report in Play Console and verify the Fragment 1.1.0 warning is gone for that release."
     ],
     "release_notes": "Updated app dependencies so release builds no longer include the outdated AndroidX Fragment 1.1.0 version flagged by Google Play."
-  }
+  },
+  "notices": [
+    "plan"
+  ]
 }
