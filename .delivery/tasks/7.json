@@ -38,5 +38,6 @@
     "findings": []
   },
   "pr": 11,
-  "repairs": 2
+  "repairs": 2,
+  "merged": "b3e4074f01e7d33465885033b9276e197e194f6a"
 }
