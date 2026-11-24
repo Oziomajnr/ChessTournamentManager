@@ -30,7 +30,8 @@
   "local": {
     "actor": "Oziomajnr",
     "client": "a5f8e7c3da704061943fe560ae2da71d",
-    "submitted": "61420e5c6850904a4cc0c3e70a1d866b61840545"
+    "submitted": "61420e5c6850904a4cc0c3e70a1d866b61840545",
+    "reviewing": "144516fd19f88536a0f235479db5dfa3c286b191"
   },
   "review": {
     "sha": "61420e5c6850904a4cc0c3e70a1d866b61840545",
@@ -41,5 +42,6 @@
       "The Gradle constraint is a reasonable way to upgrade the transitive dependency, and the note reports selection of Fragment 1.8.9, a successful release AAB build, and 25 passing JVM tests. This review had access only to the supplied diff and notes. Attach the actual release dependency insight output and build and JVM test results so those claims can be independently verified."
     ]
   },
-  "pr": 11
+  "pr": 11,
+  "repairs": 1
 }
