@@ -187,6 +187,18 @@ jobs:
           SIGNED_BUNDLE: bundle/app-release.aab
           CANDIDATE_REVISION: ${{ needs.select.outputs.revision }}
           CANDIDATE_BUILD: ${{ needs.drive.outputs.build }}
+  show-pending-approval:
+    needs: drive
+    if: needs.drive.outputs.action == 'approve'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Update the graph while production approval is pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run delivery-status.yml --repo "$GITHUB_REPOSITORY" --ref main
+
   authorize:
     needs: drive
     if: needs.drive.outputs.action == 'approve'

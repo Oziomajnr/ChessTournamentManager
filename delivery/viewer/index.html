@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://raw.githubusercontent.com; base-uri 'none'; form-action 'none'">
+  <meta name="delivery-feed" content="https://raw.githubusercontent.com/Oziomajnr/ChessTournamentManager/delivery-state/status.json">
+  <title>Issue workflow · Chess Tournament Manager</title>
+  <link rel="stylesheet" href="status.css">
+  <script src="viewer.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="knight" aria-hidden="true">♞</span>Chess Tournament Manager</div>
+    <a href="https://github.com/Oziomajnr/ChessTournamentManager/blob/delivery-state/STATUS.md">View on GitHub</a>
+  </header>
+  <main>
+    <div class="heading">
+      <h1>Issue workflow</h1>
+      <div class="sync"><span id="sync" title="Checks for a new snapshot every 30 seconds while visible">Loading status…</span><button id="refresh" type="button">Refresh</button></div>
+    </div>
+    <div class="controls">
+      <label for="issue">Follow an issue</label>
+      <select id="issue" disabled><option value="">All issues</option></select>
+    </div>
+    <p class="notice" id="notice" role="status" hidden></p>
+    <section class="detail" id="detail" aria-label="Selected issue" hidden></section>
+    <section id="graph" aria-label="Current issues by workflow stage"></section>
+    <span id="announcement" role="status" class="sr-only"></span>
+    <noscript><p>The live graph needs JavaScript. Use the GitHub link above to read the current workflow.</p></noscript>
+  </main>
+</body>
+</html>
