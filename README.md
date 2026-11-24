@@ -2,6 +2,8 @@
 
 Android app for running chess tournaments: Swiss (FIDE C.04.1 style) and Round Robin pairings, standings, tiebreaks, backup/restore, and optional web publishing.
 
+[Agentic delivery graph](#agentic-delivery-graph) · [Release instructions](#releasing-to-google-play)
+
 ## Requirements
 
 - JDK 17
@@ -59,6 +61,65 @@ revisiting the product decision, store declarations, privacy policy, and release
 ## Web viewer
 
 Static site and Firebase rules live under `web/`. Deploy with the Firebase CLI as needed.
+
+## Agentic delivery graph
+
+The delivery policy can use different task hosts and app stores. This repository runs it with GitHub Actions and Google Play. [Delivery policy](delivery/policy.py) · [Task workflow](.github/workflows/tasks.yml) · [Release workflow](.github/workflows/release.yml)
+
+```mermaid
+---
+config:
+  flowchart:
+    nodeSpacing: 20
+    rankSpacing: 32
+    padding: 8
+    wrappingWidth: 145
+---
+flowchart TD
+    accTitle: Agentic delivery from a GitHub issue to Google Play
+    accDescr: A maintainer queues an issue. Agents plan, implement and review the change. CI and review must pass on the same commit before merge. A Play-installed device test and owner approval precede a staged production rollout. Failures lead to repairs or a maintainer. The issue closes when Play confirms full availability.
+
+    %% Issue and pull request
+    intake(["Maintainer adds agent-ready to an issue"]) --> plan["Agent plans the work and acceptance checks"]
+    plan --> implement["Validate and commit the agent's edits"]
+    implement --> pr["GitHub App opens a task PR"]
+    pr --> revision["Check the current PR commit"]
+    revision --> ci["Build, lint, JVM, device and controller tests"]
+    revision --> review["Independent agent reviews the diff"]
+    ci --> gate{"Both pass?"}
+    review --> gate
+    gate -->|Yes| merge["Merge to main and queue with delivery-release"]
+    gate -->|Failed, repairs left| patch["Agent revises the PR"]
+    patch --> revision
+    gate -->|Failed after two repairs| attention["Flag delivery-attention for a maintainer"]
+
+    %% Build and internal testing
+    merge --> build["Build the merged commit with a fresh version code"]
+    build --> sign["Sign the AAB and archive it in a draft GitHub release"]
+    sign --> upload["Upload to Play internal testing"]
+    upload -->|Live on internal track| install["Check Play install, version, launch and tournament list"]
+    install --> smoke{"Device test passes?"}
+
+    %% Production rollout
+    approval{"Owner approves this build?"} -->|Yes| ten["Start production at 10%"]
+    approval -->|Declined| blocked["Hold for the maintainer"]
+    ten -->|Live| vitals{"Crash and ANR rates?"}
+    vitals -->|Too little data| wait["Hold this stage"]
+    wait --> vitals
+    vitals -->|Regression| halt["Halt the rollout"]
+    vitals -->|Healthy| promote["Promote the same build"]
+    promote -->|Live at 50%| vitals
+    promote -->|Requested 100%| full["Verify full availability"]
+    full -->|Confirmed by Play| closed(["Close the original issue"])
+
+    smoke -->|Pass| approval
+    smoke -->|Fail| repair{"Release repair available?"}
+    halt --> repair
+    repair -->|Up to two repair cycles| implement
+    repair -->|Limit reached| attention
+```
+
+The controller tracks one signed bundle by its merge commit, version code and SHA-256. If Play rejects or halts a release, it follows the same repair path as a failed device test. A replacement goes through internal testing and production approval again. [Tester setup and rollout health thresholds](docs/delivery.md#internal-testing-and-production)
 
 ## Releasing to Google Play
 
