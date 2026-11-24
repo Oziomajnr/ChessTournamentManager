@@ -12,7 +12,7 @@ from pathlib import Path
 
 from delivery import task
 from delivery.adapters import github as gh
-from delivery.agents import INSTRUCTIONS, SCHEMAS, config, editable
+from delivery.agents import INSTRUCTIONS, SCHEMAS, config, editable, staged_plan
 from delivery.policy import REPAIR_LIMIT
 
 
@@ -153,7 +153,7 @@ def validate_plan(plan):
         values = plan.get(key)
         if (
             not isinstance(values, list)
-            or not values
+            or (not values and not (key == "checks" and plan.get("post_upload_checks")))
             or not all(isinstance(v, str) and v.strip() for v in values)
         ):
             raise ValueError(f"Provide a nonempty list of {key}")
@@ -162,12 +162,13 @@ def validate_plan(plan):
         or not plan["release_notes"].strip()
     ):
         raise ValueError("Provide user-facing release_notes")
-    return {k: plan[k] for k in ("acceptance", "checks", "release_notes")}
+    fields = ("acceptance", "checks", "post_upload_checks", "release_notes")
+    return staged_plan({k: plan[k] for k in fields if k in plan})
 
 
 def save_plan(number, record, plan):
     plan = validate_plan(plan)
-    if record.data.get("plan") and record.data["plan"] != plan:
+    if record.data.get("plan") and staged_plan(record.data["plan"]) != plan:
         raise ValueError("This issue already has an approved delivery plan.")
     if not record.data.get("plan"):
         record.data["plan"] = plan

@@ -11,11 +11,13 @@ from zipfile import ZIP_STORED, ZipFile
 
 from delivery.adapters import github as gh
 from delivery.adapters.play import Play, PlayError, VersionConflict
-from delivery.agents import config
+from delivery.agents import config, staged_plan
 from delivery.policy import (
     REPAIR_LIMIT,
     artifact_id,
     health_status,
+    matches,
+    post_upload_decision,
     release_action,
     utc_now,
 )
@@ -44,11 +46,16 @@ def select():
                 "pr": task["pr"],
                 "revision": task["merged"],
                 "notes": task["plan"]["release_notes"],
+                "post_upload_checks": staged_plan(task["plan"])["post_upload_checks"],
                 "supersedes": task.get("supersedes", []),
             }
             record.save("Select merged change for release")
             break
     c = record.data.get("active")
+    if c and "post_upload_checks" not in c and not c.get("approval_request"):
+        plan = gh.Record(f"tasks/{c['issue']}").data["plan"]
+        c["post_upload_checks"] = staged_plan(plan)["post_upload_checks"]
+        record.save("Load post-upload checks for the active candidate")
     gh.output("active", "true" if c else "false")
     if c:
         gh.output("revision", c["revision"])
@@ -191,6 +198,8 @@ def approve():
     c = record.data["active"]
     if os.environ["GITHUB_RUN_ID"] != c["approval_request"]["run"]:
         raise ValueError("The approval run does not match this request")
+    if post_upload_decision(c):
+        raise ValueError("Post-upload verification is incomplete for this artifact")
     state, reviewer = approval_state(c)
     if state != "approved":
         raise ValueError("The protected environment has no approval for this artifact")
@@ -225,36 +234,51 @@ def verify():
     )
 
 
-def smoke():
+def record_evidence(kind):
     record = gh.Record("releases")
     c = record.data["active"]
-    proof = json.loads(os.environ["SMOKE_ARTIFACT"])
+    proof = json.loads(os.environ["REPORT_ARTIFACT"])
     actor = os.environ["GITHUB_ACTOR"]
     permission = gh.api(f"{gh.API}/collaborators/{actor}/permission")["permission"]
     if permission not in ("admin", "write", "maintain") or proof != artifact_id(c):
-        raise ValueError("Smoke evidence does not match the active candidate or tester")
-    result, evidence = os.environ["SMOKE_RESULT"], os.environ["SMOKE_EVIDENCE"]
-    if (
-        result not in ("passed", "failed")
-        or not evidence.strip()
-        or len(evidence) > 1600
-    ):
-        raise ValueError("Invalid smoke report")
-    if "smoke-" + str(c["build"]) not in record.data.get("notices", []):
+        raise ValueError("Evidence does not match the active candidate or tester")
+    result, evidence = (
+        os.environ["REPORT_RESULT"],
+        os.environ["REPORT_EVIDENCE"].strip(),
+    )
+    if result not in ("passed", "failed") or not evidence or len(evidence) > 1600:
+        raise ValueError("Invalid verification report")
+    if f"{kind}-{c['build']}" not in record.data.get("notices", []):
         raise ValueError(
             "The controller has not confirmed this internal release is available"
         )
-    if c.get("smoke"):
-        if c["smoke"]["artifact"] == proof and c["smoke"]["result"] == result:
-            return
-        raise ValueError("The verified smoke result already exists for this artifact")
-    c["smoke"] = {
-        "artifact": proof,
-        "result": result,
-        "evidence": evidence,
-        "actor": actor,
-    }
-    record.save("Record test of the store-installed candidate")
+    if kind == "smoke":
+        reports, key = c, "smoke"
+    else:
+        number = int(os.environ["REPORT_CHECK"])
+        checks = c.get("post_upload_checks", [])
+        if not 1 <= number <= len(checks):
+            raise ValueError("Unknown post-upload check for this candidate")
+        reports, key = c.setdefault("post_upload_reports", {}), checks[number - 1]
+    old = reports.get(key)
+    if matches(old, proof):
+        if old["result"] != result or (kind != "smoke" and old["evidence"] != evidence):
+            raise ValueError("A different result is already recorded for this artifact")
+    else:
+        reports[key] = {
+            "artifact": proof,
+            "result": result,
+            "evidence": evidence,
+            "actor": actor,
+        }
+        record.save(f"Record {kind} evidence for build {c['build']}")
+    if kind == "post-upload":
+        gh.notify_once(
+            record,
+            c["issue"],
+            f"post-upload-result-{c['build']}-{number}",
+            f"Build {c['build']}, post-upload check {number} **{result}**.\n\n{key}\n\n{evidence}",
+        )
 
 
 def request_fix(record, c, reason):
@@ -396,6 +420,17 @@ def drive():
     elif action == "observe":
         c.update(observed_percent=decision.percent, stage_since=utc_now())
         save()
+    elif action == "request_report":
+        checks = "\n".join(
+            f"{i}. {v}" for i, v in enumerate(c["post_upload_checks"], 1)
+        )
+        gh.notify_once(
+            record,
+            c["issue"],
+            f"post-upload-{c['build']}",
+            f"Internal build {c['build']} is available. Record the observations for this artifact.\n\n"
+            f"{checks}\n\n`{json.dumps(artifact_id(c))}`",
+        )
     elif action == "request_smoke":
         gh.notify_once(
             record,
@@ -418,12 +453,23 @@ def drive():
             "run": os.environ["GITHUB_RUN_ID"],
         }
         save()
-        requested_checks = gh.Record(f"tasks/{c['issue']}").data["plan"]["checks"]
+        requested_checks = staged_plan(gh.Record(f"tasks/{c['issue']}").data["plan"])[
+            "checks"
+        ]
         checklist = "\n".join("- " + check for check in requested_checks)
+        observations = "\n".join(
+            f"- {check} — {c['post_upload_reports'][check]['evidence']}"
+            for check in c.get("post_upload_checks", [])
+        )
         gh.summary(
             f"### Production approval for build {c['build']}\n\nRevision `{c['revision']}`\n\nSHA-256 `{c['sha256']}`\n\n"
             f"**Release notes**\n\n{c['notes']}\n\n[PR and CI results](https://github.com/{gh.REPO}/pull/{c['pr']}/checks)\n\n"
-            f"**Store smoke test**\n\n{c['smoke']['evidence']}\n\n**Requested feature checks**\n\n{checklist}\n\n"
+            + (
+                f"**Post-upload observations**\n\n{observations}\n\n"
+                if observations
+                else ""
+            )
+            + f"**Store smoke test**\n\n{c['smoke']['evidence']}\n\n**Requested feature checks**\n\n{checklist}\n\n"
             "The store smoke test covers startup and tournament navigation. Treat a feature check as unverified unless its result appears in the linked CI or device evidence."
         )
         gh.output("action", "approve")
@@ -442,6 +488,7 @@ def drive():
             "percent": 100,
             "verified_at": utc_now(),
             "approval": c["approval"],
+            "post_upload_reports": c.get("post_upload_reports", {}),
         }
         task.save("Record verified full production availability")
         gh.notify_once(
@@ -467,7 +514,8 @@ if __name__ == "__main__":
         "drive": drive,
         "register": register,
         "approve": approve,
-        "smoke": smoke,
+        "smoke": lambda: record_evidence("smoke"),
+        "post-upload": lambda: record_evidence("post-upload"),
         "verify": verify,
     }
     parser.add_argument("command", choices=commands.keys())

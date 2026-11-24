@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 from delivery.adapters import github as gh
-from delivery.agents import config, editable, replacements
+from delivery.agents import config, editable, replacements, staged_plan
 from delivery.policy import next_task
 
 REQUEST = Path("task-input.json")
@@ -288,7 +288,7 @@ def select(item, record, hosted=True):
         "base": target,
         "revision": head,
         "editable_roots": roots,
-        "plan": s.get("plan"),
+        "plan": staged_plan(s["plan"]) if s.get("plan") else None,
         "feedback": detail,
         "files": files,
     }
@@ -319,7 +319,9 @@ def choose():
     hosted = os.environ.get("HOSTED_AGENT_ENABLED") == "true"
     for item in gh.issues("agent-ready"):
         n = item["number"]
-        if gh.trusted_intake(n) and select(item, gh.Record(f"tasks/{n}"), hosted=hosted):
+        if gh.trusted_intake(n) and select(
+            item, gh.Record(f"tasks/{n}"), hosted=hosted
+        ):
             return
     gh.output("role", "")
 
@@ -403,7 +405,13 @@ def apply():
             "**Acceptance criteria**\n\n"
             + "\n".join("- " + x for x in result["acceptance"])
             + "\n\n**Checks**\n\n"
-            + "\n".join("- " + x for x in result["checks"]),
+            + "\n".join("- " + x for x in result["checks"])
+            + (
+                "\n\n**After internal upload**\n\n"
+                + "\n".join("- " + x for x in result["post_upload_checks"])
+                if result.get("post_upload_checks")
+                else ""
+            ),
         )
     elif role == "review":
         pr = gh.api(f"{gh.API}/pulls/{s['pr']}")

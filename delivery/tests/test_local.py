@@ -136,6 +136,16 @@ class LocalHandoffTest(unittest.TestCase):
             local.submit(7, self.root, "someone-else", "another")
         self.review.assert_not_called()
 
+    def test_reviewer_receives_staged_checks_from_the_existing_plan(self):
+        later = "Post-release validation: inspect the distributor SDK report."
+        self.data["plan"]["checks"].append(later)
+        self.commit_change()
+        local.submit(7, self.root, "owner", local.client_id(self.root))
+        reviewed = self.review.call_args.args[1]
+        self.assertEqual(reviewed["checks"], ["Test it"])
+        self.assertEqual(reviewed["post_upload_checks"], [later])
+        self.assertEqual(self.data["plan"]["checks"], ["Test it", later])
+
     def test_removed_approval_during_review_prevents_push_and_submission(self):
         self.commit_change()
 

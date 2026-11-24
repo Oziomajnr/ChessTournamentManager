@@ -18,17 +18,43 @@ TEXT = {"type": "string"}
 STRINGS = {"type": "array", "items": TEXT}
 EDIT = obj(path=TEXT, before=TEXT, after=TEXT)
 SCHEMAS = {
-    "plan": obj(acceptance=STRINGS, checks=STRINGS, release_notes=TEXT),
+    "plan": obj(
+        acceptance=STRINGS,
+        checks=STRINGS,
+        post_upload_checks=STRINGS,
+        release_notes=TEXT,
+    ),
     "implement": obj(edits={"type": "array", "items": EDIT}, summary=TEXT),
     "repair": obj(edits={"type": "array", "items": EDIT}, summary=TEXT),
     "review": obj(passed={"type": "boolean"}, findings=STRINGS),
 }
 INSTRUCTIONS = {
-    "plan": "Write concrete acceptance criteria, test cases and a short user-facing release note for this task.",
+    "plan": "Write concrete acceptance criteria and a short user-facing release note. Put code and CI checks in checks. Put observations that require the published internal build or distributor report in post_upload_checks, otherwise use an empty list.",
     "implement": "Implement the task and its tests. Return literal, unique before/after replacements. For a new file use empty before. For deletion match the entire file and use empty after.",
     "repair": "Fix the reported failure and retain the requested behavior. Return literal, unique before/after replacements against the supplied current files.",
-    "review": "Independently review the proposed changes against the task and tests. Check reliability, data integrity, security, regressions, and missing tests. Pass only if the current changes satisfy the acceptance criteria. Give actionable findings.",
+    "review": "Review the proposed implementation and tests before merge. Check reliability, data integrity, security, regressions and missing coverage against the acceptance criteria. CI independently gates the exact commit. For requirements explicitly listed in post_upload_checks, assess the implementation now. The release controller obtains the actual distributor or installed-build evidence after internal publication and requires it before production approval. Do not require or claim that later observation in a code review. Give actionable findings for defects that can be fixed before merge.",
 }
+
+
+def staged_plan(plan):
+    """Read previous plans with explicitly labeled distributor checks without editing the saved plan."""
+    post = plan.get("post_upload_checks", [])
+    if not isinstance(post, list) or not all(
+        isinstance(s, str) and s.strip() for s in post
+    ):
+        raise ValueError("Expected a list of post-upload checks")
+    post = list(post)
+    before = []
+    for check in plan["checks"]:
+        if (
+            check.lstrip()
+            .lower()
+            .startswith(("post-release validation:", "post-upload validation:"))
+        ):
+            post.append(check)
+        else:
+            before.append(check)
+    return {**plan, "checks": before, "post_upload_checks": list(dict.fromkeys(post))}
 
 
 def editable(path, roots):

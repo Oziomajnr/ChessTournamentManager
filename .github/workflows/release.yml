@@ -7,16 +7,19 @@ on:
     inputs:
       mode:
         type: choice
-        options: [advance, verify, smoke]
+        options: [advance, verify, smoke, post-upload]
         default: advance
       artifact:
-        description: Exact artifact identity supplied by the trusted device worker
+        description: Exact signed artifact identity from the issue
         required: false
       result:
-        description: Installed-build test result
+        description: Verification result (passed or failed)
         required: false
       evidence:
-        description: Device observations and any unverified checks
+        description: Observed result and source for this build
+        required: false
+      check:
+        description: Post-upload check number from the issue
         required: false
 
 permissions: {}
@@ -68,13 +71,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - if: inputs.mode == 'smoke'
-        run: python3 -m delivery.release smoke
+      - if: inputs.mode == 'smoke' || inputs.mode == 'post-upload'
+        run: python3 -m delivery.release "$REPORT_MODE"
         env:
           GH_TOKEN: ${{ github.token }}
-          SMOKE_ARTIFACT: ${{ inputs.artifact }}
-          SMOKE_RESULT: ${{ inputs.result }}
-          SMOKE_EVIDENCE: ${{ inputs.evidence }}
+          REPORT_MODE: ${{ inputs.mode }}
+          REPORT_ARTIFACT: ${{ inputs.artifact }}
+          REPORT_RESULT: ${{ inputs.result }}
+          REPORT_EVIDENCE: ${{ inputs.evidence }}
+          REPORT_CHECK: ${{ inputs.check }}
       - id: drive
         env:
           GH_TOKEN: ${{ github.token }}
