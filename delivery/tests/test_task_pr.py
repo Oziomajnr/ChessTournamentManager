@@ -55,6 +55,7 @@ class TaskPullRequestTest(unittest.TestCase):
             patch.object(task.gh, "trusted_intake", side_effect=lambda _: self.trusted)
         )
         self.output = stack.enter_context(patch.object(task.gh, "output"))
+        self.dispatch = stack.enter_context(patch.object(task.gh, "dispatch"))
 
     def api(self, path):
         if path == f"{task.gh.API}/issues/7":
@@ -137,7 +138,35 @@ class TaskPullRequestTest(unittest.TestCase):
                 self.pulls = [{"number": 9, "state": state}]
                 task.select(self.issue, self.record)
                 self.assertEqual(self.state["pr"], 9)
+        self.assertEqual(self.dispatch.call_args_list, [call("tasks.yml"), call("tasks.yml")])
         self.output.assert_not_called()
+
+    def test_local_mode_waits_for_pickup_and_an_exact_submission(self):
+        for local in (None, {"actor": "owner"}, {"actor": "owner", "submitted": self.main}):
+            if local:
+                self.state["local"] = local
+            task.select(self.issue, self.record, hosted=False)
+            self.output.assert_not_called()
+        self.state["local"]["submitted"] = self.head
+        self.assertTrue(task.select(self.issue, self.record, hosted=False))
+        self.assertIn(call("role", "open-pr"), self.output.call_args_list)
+
+    def test_local_pr_opener_rejects_changed_commit(self):
+        self.state["local"] = {"submitted": self.main}
+        task.prepare_pr()
+        self.output.assert_not_called()
+
+    def test_local_merge_queues_exact_commit_for_the_release_controller(self):
+        self.state.update(pr=9, local={"submitted": self.head},
+                          review={"passed": True, "sha": self.head})
+        self.read.side_effect = [{"object": {"sha": self.main}}, self.pr, {"behind_by": 0},
+                                 {"merged": True, "sha": "c" * 40}]
+        with (patch.object(task, "check_result", return_value=("passed", "")),
+              patch.object(task, "review_gate"), patch.object(task.gh, "labels") as labels):
+            task.select(self.issue, self.record, hosted=False)
+        self.assertEqual(self.state["merged"], "c" * 40)
+        labels.assert_called_once_with(7, add=["delivery-release"], remove=["agent-ready"])
+        self.dispatch.assert_called_once_with("release.yml")
 
     def test_current_review_and_ci_merge_only_the_exact_commit_under_branch_rules(self):
         self.state.update(pr=9, review={"sha": self.head, "passed": True})

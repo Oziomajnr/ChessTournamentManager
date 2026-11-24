@@ -34,7 +34,7 @@ def source_tree(sha, roots):
     return result
 
 
-def check_result(sha):
+def latest_ci(sha):
     runs = gh.api(
         f"{gh.API}/actions/workflows/android.yml/runs?head_sha={sha}&per_page=30"
     )["workflow_runs"]
@@ -43,9 +43,13 @@ def check_result(sha):
         for r in runs
         if r["head_sha"] == sha and r["event"] in ("workflow_dispatch", "pull_request")
     ]
-    if not runs:
+    return max(runs, key=lambda r: (r["run_number"], r["run_attempt"]), default=None)
+
+
+def check_result(sha):
+    latest = latest_ci(sha)
+    if not latest:
         return "missing", ""
-    latest = max(runs, key=lambda r: (r["run_number"], r["run_attempt"]))
     if latest["status"] != "completed":
         return "pending", latest["html_url"]
     if latest["conclusion"] == "success":
@@ -54,6 +58,7 @@ def check_result(sha):
         ["gh", "run", "view", str(latest["id"]), "--repo", gh.REPO, "--log-failed"],
         capture_output=True,
         text=True,
+        check=False,
     )
     return "failed", latest["html_url"] + "\n" + log.stdout[-12000:]
 
@@ -109,6 +114,7 @@ def review_gate(pr_number):
 
 
 def stop(record, issue, reason):
+    record.data["attention"] = reason
     gh.notify_once(record, issue, "needs-attention", reason)
     gh.labels(issue, add=["delivery-attention"], remove=["agent-ready"])
 
@@ -124,6 +130,13 @@ def change_title(issue, title):
     return title or f"Implement delivery task {issue}"
 
 
+def queue_release(record, issue, revision):
+    record.data["merged"] = revision
+    record.save(f"Task {issue} merged")
+    gh.labels(issue, add=["delivery-release"], remove=["agent-ready"])
+    gh.dispatch("release.yml")
+
+
 def task_branch(issue, state):
     branch = f"delivery/task-{int(issue)}"
     return branch + (
@@ -136,9 +149,12 @@ def task_pulls(branch):
     return gh.api(f"{gh.API}/pulls?head={owner}:{branch}&base=main&state=all")
 
 
-def select(item, record):
+def select(item, record, hosted=True):
     n = item["number"]
     s = record.data
+    local = s.get("local")
+    if not hosted and not local and not s.get("pr"):
+        return
     if "intake" not in s:
         s["intake"] = {"title": item["title"], "body": item.get("body") or ""}
         record.save(f"Record approved issue {n}")
@@ -162,9 +178,7 @@ def select(item, record):
         )
         return
     if pr and pr["merged_at"]:
-        s.update(merged=pr["merge_commit_sha"])
-        record.save(f"Task {n} merged")
-        gh.labels(n, add=["delivery-release"], remove=["agent-ready"])
+        queue_release(record, n, pr["merge_commit_sha"])
         return
     if pr and pr["state"] == "closed":
         stop(
@@ -173,7 +187,11 @@ def select(item, record):
             "The task pull request was closed. A maintainer can review it and requeue the task.",
         )
         return
-    if s.get("failures", 0) >= 3:
+    if not hosted and not local:
+        return
+    if local and (not existing or local.get("submitted") != head):
+        return
+    if not local and s.get("failures", 0) >= 3:
         stop(
             record,
             n,
@@ -186,6 +204,7 @@ def select(item, record):
         if links:
             s["pr"] = links[0]["number"]
             record.save("Record existing task pull request")
+            gh.dispatch("tasks.yml")
             return
         if head != target and gh.api(f"{gh.API}/compare/{target}...{head}")["ahead_by"]:
             gh.output("role", "open-pr")
@@ -201,6 +220,9 @@ def select(item, record):
             raise ValueError("Task pull request has an unexpected head")
         relation = gh.api(f"{gh.API}/compare/{target}...{head}")
         if relation["behind_by"]:
+            if local:
+                # The local reviewer must see the updated base and the resulting commit.
+                return
             try:
                 gh.api(gh.API + "/merges", "POST", {"base": branch, "head": target})
             except gh.GitHubError as err:
@@ -226,7 +248,7 @@ def select(item, record):
         if decision == "merge":
             review_gate(pr["number"])
             try:
-                gh.api(
+                result = gh.api(
                     f"{gh.API}/pulls/{pr['number']}/merge",
                     "PUT",
                     {"sha": head, "merge_method": "squash"},
@@ -235,6 +257,9 @@ def select(item, record):
                 # A required check, review, or new revision will be reconciled on the next run.
                 if err.status not in (405, 409):
                     raise
+            else:
+                if result.get("merged") and result.get("sha"):
+                    queue_release(record, n, result["sha"])
             return
         if decision == "needs_attention":
             stop(
@@ -251,6 +276,8 @@ def select(item, record):
             role = "review"
         else:
             return
+    if local or not hosted:
+        return
     roots = config()["editable_roots"]
     files = source_tree(head, roots)
     req = {
@@ -289,11 +316,11 @@ def select(item, record):
 
 def choose():
     gh.ensure_branch()
+    hosted = os.environ.get("HOSTED_AGENT_ENABLED") == "true"
     for item in gh.issues("agent-ready"):
         n = item["number"]
-        if gh.trusted_intake(n):
-            if select(item, gh.Record(f"tasks/{n}")):
-                return
+        if gh.trusted_intake(n) and select(item, gh.Record(f"tasks/{n}"), hosted=hosted):
+            return
     gh.output("role", "")
 
 
@@ -314,6 +341,8 @@ def prepare_pr():
         return
     s = gh.Record(f"tasks/{n}").data
     if s.get("pr") or not s.get("plan") or not s.get("intake"):
+        return
+    if s.get("local") and s["local"].get("submitted") != head:
         return
     branch = task_branch(n, s)
     ref = gh.optional(f"{gh.API}/git/ref/heads/{branch}")
@@ -357,6 +386,8 @@ def apply():
     role, n, head = (req[k] for k in ("role", "issue", "revision"))
     record = gh.Record(f"tasks/{n}")
     s = record.data
+    if s.get("local"):
+        return
     if s.get("claim") != [req["claim"], role, head]:
         raise ValueError("Task claim has changed")
     issue = gh.api(f"{gh.API}/issues/{n}")
@@ -413,6 +444,8 @@ def apply():
             gh.output("revision", revision)
     s["failures"] = 0
     record.save("Finish task agent turn")
+    if role in ("plan", "review"):
+        gh.dispatch("tasks.yml")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ release-keystore.jks
 *.keystore
 .env.local
 __pycache__/
+/.delivery-worktrees/
 
 # Firebase local cache
 web/.firebase/

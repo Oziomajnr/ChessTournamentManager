@@ -2,7 +2,7 @@
 
 Android app for running chess tournaments: Swiss (FIDE C.04.1 style) and Round Robin pairings, standings, tiebreaks, backup/restore, and optional web publishing.
 
-[Agentic delivery graph](#agentic-delivery-graph) · [Release instructions](#releasing-to-google-play)
+[Live issue status](https://github.com/Oziomajnr/ChessTournamentManager/blob/delivery-state/STATUS.md) · [Agentic delivery graph](#agentic-delivery-graph) · [Release instructions](#releasing-to-google-play)
 
 ## Requirements
 
@@ -64,7 +64,7 @@ Static site and Firebase rules live under `web/`. Deploy with the Firebase CLI a
 
 ## Agentic delivery graph
 
-The delivery policy can use different task hosts and app stores. This repository runs it with GitHub Actions and Google Play. [Delivery policy](delivery/policy.py) · [Task workflow](.github/workflows/tasks.yml) · [Release workflow](.github/workflows/release.yml)
+A maintainer labels an issue `agent-ready`, then asks local Codex to pick it up. GitHub tracks the issue, runs CI and delivers the reviewed commit to Google Play. The live view shows the stage, next step and available evidence for each issue. [Issue delivery status](https://github.com/Oziomajnr/ChessTournamentManager/blob/delivery-state/STATUS.md) · [Local pickup](docs/delivery.md#local-codex-pickup) · [Delivery policy](delivery/policy.py)
 
 ```mermaid
 ---
@@ -80,17 +80,17 @@ flowchart TD
     accDescr: A maintainer queues an issue. Agents plan, implement and review the change. CI and review must pass on the same commit before merge. A Play-installed device test and owner approval precede a staged production rollout. Failures lead to repairs or a maintainer. The issue closes when Play confirms full availability.
 
     %% Issue and pull request
-    intake(["Maintainer adds agent-ready to an issue"]) --> plan["Agent plans the work and acceptance checks"]
-    plan --> implement["Validate and commit the agent's edits"]
-    implement --> pr["GitHub App opens a task PR"]
-    pr --> revision["Check the current PR commit"]
-    revision --> ci["Build, lint, JVM, device and controller tests"]
-    revision --> review["Independent agent reviews the diff"]
+    intake(["Maintainer adds agent-ready to an issue"]) --> pickup["Local Codex claims the issue on request"]
+    pickup --> plan["Create or reuse the saved plan"]
+    plan --> implement["Implement, test and commit in the task worktree"]
+    implement --> review["Independent local Codex review of the commit"]
+    review --> pr["GitHub App opens the task PR"]
+    pr --> ci["Build, lint, JVM, device and controller tests"]
     ci --> gate{"Both pass?"}
     review --> gate
     gate -->|Yes| merge["Merge to main and queue with delivery-release"]
     gate -->|Failed, repairs left| patch["Agent revises the PR"]
-    patch --> revision
+    patch --> implement
     gate -->|Failed after two repairs| attention["Flag delivery-attention for a maintainer"]
 
     %% Build and internal testing
@@ -115,7 +115,7 @@ flowchart TD
     smoke -->|Pass| approval
     smoke -->|Fail| repair{"Release repair available?"}
     halt --> repair
-    repair -->|Up to two repair cycles| implement
+    repair -->|Up to two repair cycles| pickup
     repair -->|Limit reached| attention
 ```
 
@@ -125,7 +125,7 @@ The controller tracks one signed bundle by its merge commit, version code and SH
 
 ### A change delivered through a GitHub issue
 
-1. **Queue the work.** A maintainer applies `agent-ready` to an issue with the requested behavior and acceptance criteria. The task workflow opens a PR, runs the Android build, lint, JVM and API 36 device tests, and gets an independent review of the same commit. After merge, it records the PR and merged commit and adds `delivery-release` to the issue.
+1. **Queue and pick up the work.** Apply `agent-ready` to an issue. In the local Codex client, ask “Pick up the next agent-ready issue” or name the issue number. Codex works in a separate checkout and submits its reviewed commit to GitHub. GitHub runs CI, merges under branch protection, and adds `delivery-release` to the issue.
 2. **Build and distribute internally.** The release workflow picks up one recorded merge at a time, assigns a fresh version code, and signs the AAB with the protected upload key. Its draft GitHub release contains `candidate.zip` with the AAB and a manifest recording the commit, version code and SHA-256. The workflow uploads that bundle to Play internal testing.
 3. **Test the Play install.** On an enrolled tester device, install or update through Google Play. From a trusted checkout, run `python3 -m delivery.adapters.android_smoke --serial DEVICE_SERIAL --watch` with ADB and an authenticated maintainer GitHub CLI. The worker checks the installer, version, launch and tournament list. The native review card needs a separate eligible-account check. [Review-card test procedure](docs/in-app-review-plan.md)
 4. **Approve production once.** Open the **Deliver a release** run awaiting review. Check the release notes, device result and bundle digest, then select **Review deployments** and approve `production`. The controller promotes the same version to 10%, then 50%, then 100%. Insufficient crash or ANR data holds the current stage. The issue closes once Play reports full availability. [Release runs](https://github.com/Oziomajnr/ChessTournamentManager/actions/workflows/release.yml) · [Workflow graph and health thresholds](docs/delivery.md)
