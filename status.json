@@ -131,6 +131,16 @@
           "url": "https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45740723162"
         }
       ]
+    },
+    {
+      "number": 13,
+      "title": "Invite organizers to support app development with a one-time donation",
+      "url": "https://github.com/Oziomajnr/ChessTournamentManager/issues/13",
+      "state": "open",
+      "stage": "Backlog",
+      "detail": "A maintainer can label this issue agent-ready.",
+      "step": "backlog",
+      "links": []
     }
   ]
 }
