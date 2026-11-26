@@ -28,8 +28,8 @@ flowchart LR
         build["Build and sign"]
         internal["Internal distribution"]
         reports["Post-upload checks"]
-        device["Device check<br/>Internal testing<br/>#7"]:::occupied
-        approval["Owner approval"]
+        device["Device check"]
+        approval["Owner approval<br/>Awaiting production approval<br/>#7"]:::occupied
         rollout["Production rollout"]
         published["Published at 100%"]
         build --> internal --> reports --> device --> approval --> rollout --> published
@@ -43,4 +43,4 @@ flowchart LR
 | Issue | Stage | Next step | Evidence |
 | --- | --- | --- | --- |
 | [#6 Raise release DEX obfuscation from 0% to at least 25% by February 2027](https://github.com/Oziomajnr/ChessTournamentManager/issues/6) | Backlog | A maintainer can label this issue agent-ready. | — |
-| [#7 Update the transitive AndroidX Fragment dependency flagged by Google Play](https://github.com/Oziomajnr/ChessTournamentManager/issues/7) | Internal testing | Verify the Play-installed build on an enrolled tester device. | [PR #11](https://github.com/Oziomajnr/ChessTournamentManager/pull/11) · [Commit aa6417c](https://github.com/Oziomajnr/ChessTournamentManager/commit/aa6417cbf203aefbf552946f59f74e62709a514f) |
+| [#7 Update the transitive AndroidX Fragment dependency flagged by Google Play](https://github.com/Oziomajnr/ChessTournamentManager/issues/7) | Awaiting production approval | Review this signed build in the production environment. | [PR #11](https://github.com/Oziomajnr/ChessTournamentManager/pull/11) · [Commit aa6417c](https://github.com/Oziomajnr/ChessTournamentManager/commit/aa6417cbf203aefbf552946f59f74e62709a514f) · [Production approval](https://github.com/Oziomajnr/ChessTournamentManager/actions/runs/45740723162) |
