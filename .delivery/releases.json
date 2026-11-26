@@ -43,6 +43,15 @@
         "sha256": "5a9ab62367f98cfb5254d73f1124c671cec7c13bfdca89552c7c734e48c13acc"
       },
       "run": "45740723162"
+    },
+    "approval": {
+      "artifact": {
+        "revision": "b3e4074f01e7d33465885033b9276e197e194f6a",
+        "build": 6,
+        "sha256": "5a9ab62367f98cfb5254d73f1124c671cec7c13bfdca89552c7c734e48c13acc"
+      },
+      "reviewer": "Oziomajnr",
+      "run": "45740723162"
     }
   },
   "last_build": 6,
