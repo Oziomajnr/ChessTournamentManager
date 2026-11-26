@@ -11,8 +11,8 @@
     "build": 6,
     "sha256": "5a9ab62367f98cfb5254d73f1124c671cec7c13bfdca89552c7c734e48c13acc",
     "submitted": {
-      "action": "publish_test",
-      "percent": 0
+      "action": "promote",
+      "percent": 10
     },
     "post_upload_reports": {
       "Post-release validation: after the next build is uploaded to Play, re-check the processed SDK report in Play Console and verify the Fragment 1.1.0 warning is gone for that release.": {
